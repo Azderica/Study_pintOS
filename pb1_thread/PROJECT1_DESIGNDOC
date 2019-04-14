@@ -22,7 +22,56 @@ ALARM CLOCK
 >> A1: Copy here the declaration of each new or changed `struct’ or `struct' member, global or static variable, `typedef', or enumeration.
 Identify the purpose of each in 25 words or less.
 
+-----------------------------------------------------------------------------------------------------------
+  <../src/threads/thread.h>
+  thread 구조체에 int64_t 형 변수 napTime 을 추가해 주었다.
+  이것은 각 thread 별로 잠자야 하는 시간(block 되어야 하는 시간)을 저장하기 위해 새로 추가한 멤버이다.
+-----------------------------------------------------------------------------------------------------------
+  <../src/devices/timer.c>
+  = static struct list wait_queue; // 잠재울 스레드들을 넣어 놓을 wait queue를 전역으로 선언 하였다.
+  = int ordered_func(const struct list_elem *L1, const struct list_elem *L2) // wait queue에 들어갈 때 napTime이 더
+  작은 스레드들 먼저 삽입될 수 있도록 하는 정렬함수를 추가하였다.
+
+  = void timer_sleep(int64_t ticks) :
+  스레드를 블록하는 부분을 이 함수에 구현하였다.
+  [이 함수에 추가한 부분]
+  - struct thread *WAIT; 를 새로 선언
+  - WAIT에 현재 스레드정보 를 대입 (WAIT = thread_current();)
+  - WAIT->napTime = start + ticks; 추가 (현재 tick과 넘겨받은 ticks를 합쳐 얼마나 잠자는지(block되는지)에 대한 시간정보를 저장)
+  - list_insert_ordered(&wait_queue, &WAIT->elem, ordered_func, NULL); 추가
+    : wait queue에 napTime이 더 작은 스레드들 먼저 삽입되도록 하기 위해서이다.
+  - thread_block(); 추가
+
+  = static void timer_interrupt (struct intr_frame args UNUSED) :
+  타이머 인터럽트 함수에서 주기적으로 unblock 을 통해 깨워야 하는 스레드들이 있는지 체크하고 있으면 깨워주도록 하였다.
+  [이 함수에 추가한 부분]
+  - struct thread *WAIT; 를 새로 선언
+
+  - while(!list_empty(&wait_queue)){
+    WAIT = list_entry(list_begin(&wait_queue), struct thread, elem);
+  
+    if(WAIT->napTime <= timer_ticks()){
+
+     list_remove(&WAIT->elem);
+
+     thread_unblock(WAIT);
+    } 
+  else
+     break;
+   } 추가
+  (wait queue(리스트)에 아무것도 없을 때까지 계속 while문을 돌면서 체크)
+  (리스트 맨 첫번째 요소를 WAIT에 대입)
+  (그 요소의 napTime이 현재 시간(timer_ticks()) 보다 작거나 같으면 깨워주어야 하니까,
+  리스트에서 그 요소를 삭제 (list_remove) 한 다음, 스레드 언블록 해 주었다.)
+-----------------------------------------------------------------------------------------------------------
 
 ---- ALGORITHMS ----
 >> A2: Briefly describe what happens in a call to timer_sleep(), including the effects of the timer interrupt handler.
+  재워야하는 시간까지의 시간 만큼을 thread struct의 구조에 있는 napTime에 저장한다.
+  그 후, 이를 이전에 선언한 wait_queue에 오름차순으로 정렬시켜 넣어준다.
+  그 다음에 thread block(현재 쓰레드롤 sleep 상태로 만드는 것) 처리를 해준다.
+
 >> A3: What steps are taken to minimize the amount of time spent in the timer interrupt handler?
+  interrupt에 소요되는 시간을 최소하기 위해서, 기존에 queue에 넣을 때 tick을 오름차순으로 정렬해서 넣는다.
+  그래서, 깨워야할 애들만 깨우는 구조이다.
+
