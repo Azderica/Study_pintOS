@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
+#include <list.h>
 #include "devices/pit.h"
 #include "threads/interrupt.h"
 #include "threads/synch.h"
@@ -30,13 +31,79 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
-/* Sets up the timer to interrupt TIMER_FREQ times per second,
+/////////////////////////////////////////////////////////////////////////
+/* chanhui - thread block, unblock function declaration */
+//static void th_block(int64_t napTime, struct thread *cur);
+//static void th_unblock(void);
+
+static struct list wait_queue; // for pintos#1, make new wait queue(list)
+
+/*struct wait{ // save thread information(napTime, etc)
+int64_t napTime;
+struct thread *cur;
+struct list_elem elem;
+};
+////////////////////////////////////////////////////////////////////////
+*/
+/* 1. thread block func 
+void th_block(int64_t napTime, struct thread *cur)
+{
+   To receive the information of the thread to be blocked,
+    the WAIT structure is allocated. 
+ struct wait *wait_TH = (struct wait *)malloc(sizeof(struct wait));
+
+   stores the napTime and current thread information
+     passed as arguments 
+ wait_TH->napTime = napTime;
+ wait_TH->cur = cur;
+
+   insert thread from the back of the list. 
+ list_push_back(&wait_queue, &wait_TH->elem);
+
+   And, The thread is blocked. 
+ thread_block();
+}
+
+ 2. thread unblock func 
+void th_unblock(){
+
+ struct wait *wait_TH;
+ 
+  Continue to check the list for threads to wake up(unblock)
+    until the list is empty.  
+ while(!list_empty(&wait_queue)){
+  
+   Get the list information in the first.
+  wait_TH = list_entry(list_begin(&wait_queue), struct wait, elem);
+  
+   If the stored napTime is less than or equal to the current timer time,
+  it should be unblocked.(thread unblocking)
+  if(wait_TH->napTime <= timer_ticks()){
+  
+  //(1) erase from list
+  // list_remove(&wait_TH->elem);
+   list_pop_front(&wait_queue);
+   thread_unblock(wait_TH->cur);
+  }
+  
+  else
+   break;
+
+ } 
+
+}
+
+
+ Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
+
 void
 timer_init (void) 
 {
+  list_init(&wait_queue);
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -89,11 +156,26 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
+  struct thread *WAIT;
 
+  int64_t start = timer_ticks ();
+  enum intr_level old;
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+
+  WAIT = thread_current();
+  /* Thread blocking works normally when interrupts are off. */
+  old = intr_disable ();  
+  
+  WAIT->napTime = start + ticks;
+  
+  list_push_back(&wait_queue, &WAIT->elem);
+  
+  thread_block();
+  
+  intr_set_level (old);
+
+/* while (timer_elapsed (start) < ticks) 
+    thread_yield ();//cpu exit, into "ready" queue //chan */
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -171,7 +253,27 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  thread_tick ();
+  //thread_tick ();
+
+/* chanhui */
+/* On timer interrupt, check if there is a thread that should wake up */
+  struct thread *WAIT;
+  while(!list_empty(&wait_queue)){
+  WAIT = list_entry(list_begin(&wait_queue), struct thread, elem);
+  
+  if(WAIT->napTime <= timer_ticks()){
+
+  list_remove(&WAIT->elem);
+
+  thread_unblock(WAIT);
+  }
+
+  else
+   break;
+   //continue;
+ }
+ thread_tick ();
+
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
