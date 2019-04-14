@@ -28,6 +28,12 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+/* List sleep list */
+static struct list sleep_list;		// for pb1
+
+/* Next wake up tick*/
+static int64_t next_awake_tick;		// for pb1
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -92,6 +98,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&sleep_list);	// for pb1
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -581,7 +588,55 @@ allocate_tid (void)
 
   return tid;
 }
-
+
+/* thread_sleep */
+void
+thread_sleep(int64_t tick){
+  struct thread *current;
+  
+  // prohibit interrupt
+  enum intr_level t_level;
+  t_level = intr_disable();
+
+  current = thread_current();		// current is thread current
+  ASSERT(current != idle_thread);	// if idle thread, exit
+  if(next_awake_tick > tick)
+    next_awake_tick = tick;
+
+  list_push_back(&sleep_list, &current->elem);
+  thread_block();
+
+  // run interrupt
+  intr_set_level(t_level);
+}
+
+/* thread_awake*/
+void
+thread_awake(int64_t tick){
+  next_awake_tick = INT64_MAX;
+  struct list_elem *element;
+  element = list_begin(&sleep_list);
+  while(element != list_end(&sleep_list)){
+    struct thread *t_thread = list_entry(element, struct thread, elem);
+
+    if(tick >= t_thread->wake_up_tick){
+      element = list_remove(&t_thread->elem);
+      thread_unblock(t_thread);
+    } else {
+      element = list_next(element);
+      if(next_awake_tick > tick)
+        next_awake_tick = tick;
+    }
+  }
+}
+
+/* get awake tick */
+int64_t
+get_awake_tick(void){
+  return next_awake_tick;
+}
+
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
