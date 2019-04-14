@@ -28,6 +28,8 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+static struct list sleep_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -84,6 +86,34 @@ static tid_t allocate_tid (void);
 
    It is not safe to call thread_current() until this function
    finishes. */
+
+bool exit_time_compute(const struct list_elem *A, const struct list_elem *B, void *aux){
+    struct thread *A_thread = list_entry(A,struct thread,elem);
+    struct thread *B_thread = list_entry(B,struct thread,elem);
+
+    return A_thread->will_awake < B_thread->will_awake;
+}
+
+void thread_sleep(int64_t dl){
+    enum intr_level hi_level;
+    struct thread *current_thread = thread_current();
+    hi_level = intr_disable();
+    current_thread->will_awake = dl;
+    list_insert_ordered(&sleep_list, &current_thread->elem, exit_time_compute, NULL);
+    thread_block();
+    intr_set_level(hi_level);
+}
+
+void thread_awake(int64_t ticks){
+    while(!list_empty(&sleep_list)){
+	if(ticks >= (list_entry(list_front(&sleep_list), struct thread, elem)->will_awake)){
+	    thread_unblock(list_entry(list_pop_front(&sleep_list), struct thread, elem));
+	}
+	else{
+	    break;
+	}
+    }
+}
 void
 thread_init (void) 
 {
@@ -92,6 +122,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&sleep_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
