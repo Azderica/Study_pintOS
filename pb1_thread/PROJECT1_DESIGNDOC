@@ -1,0 +1,28 @@
+---- GROUP ----
+>> Fill in the names and email addresses of your group members.
+
+Park Myunghun <mh97888@gmail.com>
+Seok Chanhui  <chanhuicom@gmail.com>
+Choi Jiwon    <acantos1@naver.com>
+
+---- PRELIMINARIES ----
+>> Describe briefly which parts of the assignment were implemented by each member of your team and specify the contribution between
+your member, say 1:1:1 -> 1:1:1 
+Park Myunghun     : worked together
+Seok Chanhui      : worked together
+Choi Jiwon        : worked together
+
+/* meeting schedule*/
+first meeting     : 2019.04.09 19:30 ~ 22:00
+second meeting    : 2019.04.14 14:00 ~ 18:00
+
+ALARM CLOCK
+===========
+---- DATA STRUCTURES ----
+>> A1: Copy here the declaration of each new or changed `struct’ or `struct' member, global or static variable, `typedef', or enumeration.
+Identify the purpose of each in 25 words or less.
+
+
+---- ALGORITHMS ----
+>> A2: Briefly describe what happens in a call to timer_sleep(), including the effects of the timer interrupt handler.
+>> A3: What steps are taken to minimize the amount of time spent in the timer interrupt handler?
