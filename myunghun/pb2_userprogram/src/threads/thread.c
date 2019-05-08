@@ -216,6 +216,12 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  /* ------------------------------------------------ */
+  struct child* child_ = malloc(sizeof(struct child));
+  child_init(child_, tid);
+  t->parent = thread_current();
+  /* ------------------------------------------------ */
+
   return tid;
 }
 
@@ -477,6 +483,16 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
+  /* ---------------------------------------------------------- */
+  list_init(&t->children);
+  list_init(&t->files);
+  t->exit_status = -1111;
+  sema_init(&t->wait_lock, 0);
+  sema_init(&t->mutex, 1);
+  t->wait_which_child = 0;
+  t->killed_notby_kernel = true;
+  t->wait_already = false;
+  /* ---------------------------------------------------------- */
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -640,3 +656,24 @@ get_awake_tick(void){
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+/* ------------------------------------------------------------------ */
+struct list_elem *findsChildbyId(tid_t id, struct list *childList){
+  struct list_elem *e;
+  for(e = list_begin(childList); e != list_end(childList); e = list_next(e)){
+    struct child *f = list_entry(e, struct child, elem);
+    if(f->tid == id)
+      return e;
+  }
+  return NULL;
+}
+
+void child_init(struct child *child_, tid_t tid){
+  child_->tid = tid;
+  child_->exit_status = thread_current()->exit_status;
+  child_->hold_lock_or_not = false;
+  child_->alive = true;
+  list_push_back(&thread_current()->children, &child_->elem);
+}
+/* ------------------------------------------------------------------ */
+
