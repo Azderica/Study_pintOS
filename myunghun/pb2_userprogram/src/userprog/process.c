@@ -108,6 +108,13 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
   /* ----------------------------------------------------------------- */
+  int i, sum=0;
+  for(i=0; i<100000000; i++)
+    sum += i;
+  printf("%d\n", sum);
+  return -1;
+
+  /*
   if(thread_current()->wait_already)
     return -1;
   struct list_elem * e1 = NULL;
@@ -137,6 +144,7 @@ process_wait (tid_t child_tid UNUSED)
     return ch->exit_status;
   } else 
     return -1;
+  */
   /* ----------------------------------------------------------------- */
 }
 
@@ -276,6 +284,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+
+  hex_dump(*esp, *esp, 100, 1);
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -590,6 +600,8 @@ void setup_user_stack(void **esp, int argc, char **argv){
 
   *esp -= 4;
   (*(int*)(*esp))= 0;
+
+  hex_dump(*esp, *esp, 100, 1);
 }
 /* ----------------------------------------------------------------- */
 

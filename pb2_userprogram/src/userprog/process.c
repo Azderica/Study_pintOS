@@ -30,7 +30,7 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-
+  
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -38,12 +38,87 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /* ----------------------------------------------------------------- */
+  char *parse_name, *saveptr;
+  parse_name = malloc(strlen(file_name)+1);
+  strlcpy(parse_name, file_name, strlen(file_name)+1);
+  parse_name = strtok_r(parse_name, " ", &saveptr);
+
+  if (filesys_open(parse_name) == NULL)
+     return -1;
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create(parse_name, PRI_DEFAULT, start_process, fn_copy);
+ 
+  /* ----------------------------------------------------------------- */
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
 }
+
+/* ----------------------------------------------------------------- */
+void make_esp(char *file_name, void **esp){
+  char **argv;
+  int argc = 0;
+  int total_len = 0;
+  char *copy_name, *token, *saveptr;
+  int i, len;
+
+  copy_name = malloc(strlen(file_name)+1);
+  strlcpy(copy_name, file_name, strlen(file_name)+1);
+  
+  token = strtok_r(copy_name, " ", &saveptr);
+  while(token != NULL){
+    argc += 1;
+    token = strtok_r(NULL, " ", &saveptr);
+  }
+
+  argv = (char **)malloc(sizeof(char *) * argc);
+  strlcpy(copy_name, file_name, strlen(file_name)+1);
+  
+  token = strtok_r(copy_name, " ", &saveptr);
+  for(i = 0; i < argc; i++){
+    len = strlen(token);
+    argv[i] = token;
+    token = strtok_r(NULL, " ", &saveptr);
+  }
+  
+  //*esp -= 16;
+  for(i = argc - 1; i >= 0; i--){
+    len = strlen(argv[i]) + 1;
+    *esp -= len;
+    total_len += len;
+    strlcpy(*esp, argv[i], len);
+    argv[i] = *esp;
+  }
+  
+  while((uint32_t)(*esp)%4 != 0){
+    *esp -= 1;
+    (*(char *)(*esp)) = 0;
+  }
+  
+  *esp -= 4;
+  **(int **)esp = 0;
+  
+  for(i = argc - 1; i >= 0; i--){
+    *esp -= 4;
+    **(int **)esp = argv[i];
+  }
+
+  *esp -= 4;
+  **(int **)esp = (*esp + 4);
+
+  *esp -= 4;
+  **(int **)esp = argc;
+
+  *esp -= 4;
+  **(int **)esp = 0;  
+
+  //hex_dump(*esp, *esp, 100, 1);
+  free(argv);
+}
+/* ----------------------------------------------------------------- */
 
 /* A thread function that loads a user process and starts it
    running. */
@@ -54,18 +129,32 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+  /* ----------------------------------------------------------------- */
+  char *parse_name, *saveptr;
+  parse_name = malloc(strlen(file_name)+1);
+  strlcpy(parse_name, file_name, strlen(file_name)+1);
+  parse_name = strtok_r(parse_name, " ", &saveptr);
+  //printf("%s\n", parse_name);
+  /* ----------------------------------------------------------------- */
+  
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
-
+  /* ----------------------------------------------------------------- */
+  success = load (parse_name, &if_.eip, &if_.esp);
+  
+  if (success){
+    make_esp(file_name, &if_.esp);
+  }
+  /* ----------------------------------------------------------------- */
+  
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
-
+  
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -76,7 +165,7 @@ start_process (void *file_name_)
   NOT_REACHED ();
 }
 
-/* Waits for thread TID to die and returns its exit status.  If
+/* Waits ifor thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
    child of the calling process, or if process_wait() has already
@@ -85,10 +174,36 @@ start_process (void *file_name_)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
+int sum = 0;
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
+  /* ----------------------------------------------------------------- */
+  /*
+  int i;
+  for(i=0; i<10000000; i++)
+    sum += i;
+  //printf("%d\n", sum);
   return -1;
+  */
+     
+  struct list_elem *e;
+  struct thread* t = NULL;
+  int exit_status;
+
+  for (e = list_begin(&(thread_current()->child)); e != list_end(&(thread_current()->child)); e = list_next(e)){
+    t = list_entry(e, struct thread, child_elem);
+    if (t->tid == child_tid){
+      sema_down(&(t->child_lock));
+      exit_status = t->exit_status;
+      list_remove(&(t->child_elem));
+      sema_up(&(t->mem_lock));
+      return exit_status;
+    }
+  }
+  return -1;
+  
+  /* ----------------------------------------------------------------- */
 }
 
 /* Free the current process's resources. */
@@ -114,6 +229,10 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  /* ----------------------------------------------------------------- */
+  sema_up(&(cur->child_lock));
+  sema_down(&(cur->mem_lock));
+  /* ----------------------------------------------------------------- */
 }
 
 /* Sets up the CPU for running user code in the current
@@ -131,7 +250,7 @@ process_activate (void)
      interrupts. */
   tss_update ();
 }
-
+
 /* We load ELF binaries.  The following definitions are taken
    from the ELF specification, [ELF1], more-or-less verbatim.  */
 
@@ -221,6 +340,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  //printf("\n%s\n", file_name);
   /* Open executable file. */
   file = filesys_open (file_name);
   if (file == NULL) 
@@ -228,7 +348,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
-
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -315,7 +434,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file_close (file);
   return success;
 }
-
 /* load() helpers. */
 
 static bool install_page (void *upage, void *kpage, bool writable);
@@ -360,6 +478,8 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
      assertions in memcpy(), etc. */
   if (phdr->p_vaddr < PGSIZE)
     return false;
+  //if (phdr->p_offset < PGSIZE)
+  //  return false;
 
   /* It's okay. */
   return true;
