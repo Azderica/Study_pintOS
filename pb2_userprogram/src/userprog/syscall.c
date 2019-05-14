@@ -5,11 +5,18 @@
 #include "threads/thread.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "filesys/off_t.h"
 
 static void syscall_handler (struct intr_frame *);
 
 /* ----------------------------------------------------------------- */
 typedef int pid_t;
+
+struct file{
+  struct inode *inode;
+  off_t pos;
+  bool deny_write;
+};
 
 void syscall_init (void);
 void halt (void);
@@ -41,6 +48,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   //printf ("system call!\n");
   //thread_exit ();
   is_user_addr_valid(f->esp);  
+  is_user_addr_valid(f->esp + 20);
 
   switch (*(int *)(f->esp)) {
     case SYS_HALT:
@@ -127,19 +135,32 @@ int wait (pid_t pid){
 }
 
 bool create (const char *file, unsigned initial_size){
+  if (file == NULL)
+    exit(-1);
+  is_user_addr_valid(file);
   return filesys_create(file, initial_size);
 }
 
 bool remove (const char *file){
+  if (file == NULL)
+    exit(-1);
+  is_user_addr_valid(file);
   return filesys_remove(file);
 }
 
 int open (const char *file){
   int i;
-  struct file* file_ptr = filesys_open(file);
+  struct file* file_ptr;
+  if (file == NULL)
+    exit(-1);
+  is_user_addr_valid(file);
+  file_ptr = filesys_open(file);
   if(file_ptr != NULL) {
     for (i = 3; i < 128; i++) {
       if(thread_current()->fd[i] == NULL) {
+        if (strcmp(thread_current()->name, file) == 0) {
+          file_deny_write(file_ptr);
+        }
         thread_current()->fd[i] = file_ptr;
         return i;
       }
@@ -151,11 +172,14 @@ int open (const char *file){
 }
 
 int filesize (int fd){
+  if (thread_current()->fd[fd] == NULL)
+    exit(-1);
   return file_length(thread_current()->fd[fd]);
 }
 
 int read (int fd, void* buffer, unsigned size){
   int i;
+  is_user_addr_valid(buffer);
   if (fd == 0) {
     for (i = 0; i < size; i++){
       if (((char *)buffer)[i] == '\0') {
@@ -163,30 +187,47 @@ int read (int fd, void* buffer, unsigned size){
       }
     }
   } else if (fd > 2) {
+    if (thread_current()->fd[fd] == NULL)
+      exit(-1);
+    if (thread_current()->fd[fd]->deny_write != 0) {
+      file_deny_write(thread_current()->fd[fd]);
+    }
     return file_read(thread_current()->fd[fd], buffer, size);
   }
   return i;
 }
 
 int write (int fd, const void *buffer, unsigned size){
+  is_user_addr_valid(buffer);
   if (fd == 1){
     putbuf(buffer, size);
     return size;
   } else if (fd > 2) {
+    if (thread_current()->fd[fd] == NULL)
+      exit(-1);
     return file_write(thread_current()->fd[fd], buffer, size);
   }
   return -1;
 }
 
 void seek (int fd, unsigned position){
+  if (thread_current()->fd[fd] == NULL)
+    exit(-1);
   file_seek(thread_current()->fd[fd], position);
 }
 
 unsigned tell (int fd){
+  if (thread_current()->fd[fd] == NULL)
+    exit(-1);
   return file_tell(thread_current()->fd[fd]);
 }
 
 void close (int fd){
+  struct file* file_ptr;
+  if (thread_current()->fd[fd] == NULL)
+    exit(-1);
+  file_ptr = thread_current()->fd[fd];
+  thread_current()->fd[fd] = NULL;
   return file_close(thread_current()->fd[fd]);
 }
 

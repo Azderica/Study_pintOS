@@ -91,43 +91,29 @@ struct thread
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
 
+    /* thread napTime */
+    int64_t napTime;			/* napTime saved. */
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-#endif
-    /* --------------------------------------------------- */
+    /* ----------------------------------------------------------------- */
+    struct semaphore child_lock;
+    struct semaphore mem_lock;
+    struct list child;
+    struct list_elem child_elem;
     int exit_status;
+    struct file* fd[128];
+    /* ----------------------------------------------------------------- */
 
-    struct list children;
-    struct list files;
-    struct thread* parent;
-
-    struct semaphore wait_lock;
-    struct semaphore mutex;
-    int wait_which_child;
-    bool wait_already;
-    bool killed_notby_kernel;
-   /* ---------------------------------------------------- */
+#endif
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-
-    /* wake up tick */
-    int64_t wake_up_tick;		/* wake up tick. */
   };
-
-/* ---------------------------------------------------- */
-struct child{
-    int tid;
-    struct list_elem elem;
-    int exit_status;
-    bool hold_lock_or_not;
-    bool alive;
-};
-/* ---------------------------------------------------- */
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -164,14 +150,5 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-
-/* ---------------------------------------------------- */
-void child_init(struct child *, tid_t);
-struct list_elem * findsChildbyId(tid_t id, struct list *childList);
-/* ---------------------------------------------------- */
-
-void thread_sleep(int64_t ticks);
-void thread_awake(int64_t ticks);
-int64_t get_awake_tick(void);
 
 #endif /* threads/thread.h */

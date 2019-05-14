@@ -28,12 +28,6 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
-/* List sleep list */
-static struct list sleep_list;		// for pb1
-
-/* Next wake up tick*/
-static int64_t next_awake_tick;		// for pb1
-
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -98,7 +92,6 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
-  list_init (&sleep_list);	// for pb1
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -215,12 +208,6 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-
-  /* ------------------------------------------------ */
-  struct child* child_ = malloc(sizeof(struct child));
-  child_init(child_, tid);
-  t->parent = thread_current();
-  /* ------------------------------------------------ */
 
   return tid;
 }
@@ -472,6 +459,10 @@ is_thread (struct thread *t)
 static void
 init_thread (struct thread *t, const char *name, int priority)
 {
+  /* ----------------------------------------------------------------- */
+  int i;
+  /* ----------------------------------------------------------------- */
+
   ASSERT (t != NULL);
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
@@ -483,16 +474,18 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
-  /* ---------------------------------------------------------- */
-  list_init(&t->children);
-  list_init(&t->files);
-  t->exit_status = -1111;
-  sema_init(&t->wait_lock, 0);
-  sema_init(&t->mutex, 1);
-  t->wait_which_child = 0;
-  t->killed_notby_kernel = true;
-  t->wait_already = false;
-  /* ---------------------------------------------------------- */
+
+/* ----------------------------------------------------------------- */
+#ifdef USERPROG
+  for (i = 0; i < 128; i++)
+    t->fd[i] = NULL;
+  sema_init(&(t->child_lock), 0);
+  sema_init(&(t->mem_lock), 0);
+  list_init(&(t->child));
+  list_push_back(&(running_thread()->child), &(t->child_elem));
+#endif
+/* ----------------------------------------------------------------- */
+
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -605,75 +598,6 @@ allocate_tid (void)
   return tid;
 }
 
-/* thread_sleep */
-void
-thread_sleep(int64_t tick){
-  struct thread *current;
-  
-  // prohibit interrupt
-  enum intr_level t_level;
-  t_level = intr_disable();
-
-  current = thread_current();		// current is thread current
-  ASSERT(current != idle_thread);	// if idle thread, exit
-  if(next_awake_tick > tick)
-    next_awake_tick = tick;
-
-  list_push_back(&sleep_list, &current->elem);
-  thread_block();
-
-  // run interrupt
-  intr_set_level(t_level);
-}
-
-/* thread_awake*/
-void
-thread_awake(int64_t tick){
-  next_awake_tick = INT64_MAX;
-  struct list_elem *element;
-  element = list_begin(&sleep_list);
-  while(element != list_end(&sleep_list)){
-    struct thread *t_thread = list_entry(element, struct thread, elem);
-
-    if(tick >= t_thread->wake_up_tick){
-      element = list_remove(&t_thread->elem);
-      thread_unblock(t_thread);
-    } else {
-      element = list_next(element);
-      if(next_awake_tick > tick)
-        next_awake_tick = tick;
-    }
-  }
-}
-
-/* get awake tick */
-int64_t
-get_awake_tick(void){
-  return next_awake_tick;
-}
-
-
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
-
-/* ------------------------------------------------------------------ */
-struct list_elem *findsChildbyId(tid_t id, struct list *childList){
-  struct list_elem *e;
-  for(e = list_begin(childList); e != list_end(childList); e = list_next(e)){
-    struct child *f = list_entry(e, struct child, elem);
-    if(f->tid == id)
-      return e;
-  }
-  return NULL;
-}
-
-void child_init(struct child *child_, tid_t tid){
-  child_->tid = tid;
-  child_->exit_status = thread_current()->exit_status;
-  child_->hold_lock_or_not = false;
-  child_->alive = true;
-  list_push_back(&thread_current()->children, &child_->elem);
-}
-/* ------------------------------------------------------------------ */
-

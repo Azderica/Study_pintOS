@@ -3,13 +3,12 @@
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
+#include <list.h>
 #include "devices/pit.h"
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
   
-/* See [8254] for hardware details of the 8254 timer chip. */
-
 #if TIMER_FREQ < 19
 #error 8254 timer requires TIMER_FREQ >= 19
 #endif
@@ -30,13 +29,31 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
-/* Sets up the timer to interrupt TIMER_FREQ times per second,
-   and registers the corresponding interrupt. */
+/////////////////////////////////////////////////////////////////////////
+/***** Team 11 - Park Myung Hun, Choi Ji Won, Seok Chan Hui *****/
+
+static struct list wait_queue; // for pintos#1, make new wait queue(list)
+
+/* ordered function */
+int ordered_func(const struct list_elem *L1, const struct list_elem *L2){
+ struct thread *temp1 = list_entry(L1, struct thread, elem);
+ struct thread *temp2 = list_entry(L2, struct thread, elem);
+ 
+ if(temp1->napTime < temp2->napTime){
+	return 1;
+ }
+ else
+ 	return 0;
+}
+
 void
 timer_init (void) 
 {
+  list_init(&wait_queue); // initialize
+
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -67,8 +84,7 @@ timer_calibrate (void)
 }
 
 /* Returns the number of timer ticks since the OS booted. */
-int64_t
-timer_ticks (void) 
+int64_t timer_ticks (void) 
 {
   enum intr_level old_level = intr_disable ();
   int64_t t = ticks;
@@ -78,23 +94,31 @@ timer_ticks (void)
 
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
-int64_t
-timer_elapsed (int64_t then) 
+int64_t timer_elapsed (int64_t then) 
 {
   return timer_ticks () - then;
 }
 
-/* Sleeps for approximately TICKS timer ticks.  Interrupts must
-   be turned on. */
-void
-timer_sleep (int64_t ticks) 
+/* Team11_ Implement a thread block. */
+void timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
+  struct thread *WAIT;
 
+  int64_t start = timer_ticks ();
+  enum intr_level old;
   ASSERT (intr_get_level () == INTR_ON);
+
+  WAIT = thread_current();
+  /* Team11_ Thread blocking works normally when interrupts are off. */
+  old = intr_disable ();  
   
-  /* call thread_sleep */
-  thread_sleep(start+ticks);
+  WAIT->napTime = start + ticks;
+  /* Team11_ When inserting into a queue, put in in ascending order of napTime. */
+  list_insert_ordered(&wait_queue, &WAIT->elem, ordered_func, NULL);
+  
+  thread_block(); // block
+  
+  intr_set_level (old);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -172,12 +196,26 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  thread_tick ();
+  //thread_tick ();
 
-  /* get awake */
-  if(get_awake_tick() <= ticks){
-    thread_awake(ticks);
+/* Team 11_ */
+/* On timer interrupt, check if there is a thread that should wake up */
+  struct thread *WAIT;
+  while(!list_empty(&wait_queue)){
+   WAIT = list_entry(list_begin(&wait_queue), struct thread, elem);
+  
+  if(WAIT->napTime <= timer_ticks()){
+
+   list_remove(&WAIT->elem);
+
+   thread_unblock(WAIT);
   }
+
+  else
+   break;
+ }
+ thread_tick ();
+
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
