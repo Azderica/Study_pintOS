@@ -383,7 +383,7 @@ thread_get_recent_cpu (void)
   /* Not yet implemented. */
   return 0;
 }
-
+
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -432,7 +432,7 @@ kernel_thread (thread_func *function, void *aux)
   function (aux);       /* Execute the thread function. */
   thread_exit ();       /* If function() returns, kill the thread. */
 }
-
+
 /* Returns the running thread. */
 struct thread *
 running_thread (void) 
@@ -476,13 +476,16 @@ init_thread (struct thread *t, const char *name, int priority)
   list_push_back (&all_list, &t->allelem);
 
 /* ----------------------------------------------------------------- */
+/* project2(1) - thread.c*/
 #ifdef USERPROG
-  for (i = 0; i < 128; i++)
+  for (i = 0; i < 128; i++)		// init file pointer
     t->fd[i] = NULL;
-  sema_init(&(t->child_lock), 0);
-  sema_init(&(t->mem_lock), 0);
-  list_init(&(t->child));
-  list_push_back(&(running_thread()->child), &(t->child_elem));
+  t->parent = running_thread();		// parent = running thread()
+  sema_init(&(t->child_lock), 0);	// semaphore init, child_lock
+  sema_init(&(t->mem_lock), 0);		// semaphore init, memory_lock
+  sema_init(&(t->load_lock), 0);	// semaphore init, load_lock
+  list_init(&(t->child));		// list init
+  list_push_back(&(running_thread()->child), &(t->child_elem));	// list <- running thread()
 #endif
 /* ----------------------------------------------------------------- */
 

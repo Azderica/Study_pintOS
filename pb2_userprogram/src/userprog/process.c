@@ -30,7 +30,12 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-  
+  /* ----------------------------------------------------------------- */
+  /* project2(1) - process.c */
+  struct list_elem* e;
+  struct thread* t;
+  /* ----------------------------------------------------------------- */
+   
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -39,6 +44,8 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* ----------------------------------------------------------------- */
+  /* project2(2) - process.c */
+  // parsing file name;
   char *parse_name, *saveptr;
   parse_name = malloc(strlen(file_name)+1);
   strlcpy(parse_name, file_name, strlen(file_name)+1);
@@ -49,15 +56,29 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(parse_name, PRI_DEFAULT, start_process, fn_copy);
- 
   /* ----------------------------------------------------------------- */
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+ 
+  /* ----------------------------------------------------------------- */
+  /* project2(3) - process.c */
+  /* find exit status, and run process wait / this is for landom test */
+  for (e = list_begin(&thread_current()->child); e != list_end(&thread_current()->child); e = list_next(e)){
+    t = list_entry(e, struct thread, child_elem);
+      if (t->exit_status == -1) {
+        return process_wait(tid);
+      }
+  }
+
+  /* ----------------------------------------------------------------- */
+
   return tid;
 }
 
 /* ----------------------------------------------------------------- */
+/* project2(4) - process.c */
+// make esp;
 void make_esp(char *file_name, void **esp){
   char **argv;
   int argc = 0;
@@ -84,7 +105,6 @@ void make_esp(char *file_name, void **esp){
     token = strtok_r(NULL, " ", &saveptr);
   }
   
-  //*esp -= 16;
   for(i = argc - 1; i >= 0; i--){
     len = strlen(argv[i]) + 1;
     *esp -= len;
@@ -115,7 +135,7 @@ void make_esp(char *file_name, void **esp){
   *esp -= 4;
   **(int **)esp = 0;  
 
-  //hex_dump(*esp, *esp, 100, 1);
+  //hex_dump(*esp, *esp, 100, 1);	// for check
   free(argv);
 }
 /* ----------------------------------------------------------------- */
@@ -130,6 +150,8 @@ start_process (void *file_name_)
   bool success;
 
   /* ----------------------------------------------------------------- */
+  /* project2(5) - process.c */
+  // parsing file name
   char *parse_name, *saveptr;
   parse_name = malloc(strlen(file_name)+1);
   strlcpy(parse_name, file_name, strlen(file_name)+1);
@@ -143,15 +165,17 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   /* ----------------------------------------------------------------- */
+  /* project2(6) - process.c */
+  // load with parsing name
   success = load (parse_name, &if_.eip, &if_.esp);
   
   if (success){
-    make_esp(file_name, &if_.esp);
+    make_esp(file_name, &if_.esp);		// setup stack in here
   }
-  /* ----------------------------------------------------------------- */
   
   /* If load failed, quit. */
   palloc_free_page (file_name);
+  /* ----------------------------------------------------------------- */
   if (!success) 
     thread_exit ();
   
@@ -174,19 +198,23 @@ start_process (void *file_name_)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int sum = 0;
+
+//int sum = 0; -- first loop
 int
 process_wait (tid_t child_tid) 
 {
   /* ----------------------------------------------------------------- */
-  /*
+  /* -- first loop
   int i;
   for(i=0; i<10000000; i++)
     sum += i;
   //printf("%d\n", sum);
   return -1;
   */
-     
+
+  /* project2(7) - process.c */
+  // make process wait
+  // parent is waiting until child is lock;
   struct list_elem *e;
   struct thread* t = NULL;
   int exit_status;
@@ -230,6 +258,8 @@ process_exit (void)
       pagedir_destroy (pd);
     }
   /* ----------------------------------------------------------------- */
+  /* project2(8) - process.c */
+  // call child is finish,
   sema_up(&(cur->child_lock));
   sema_down(&(cur->mem_lock));
   /* ----------------------------------------------------------------- */

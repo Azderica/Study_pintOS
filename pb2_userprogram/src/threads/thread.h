@@ -101,12 +101,15 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     /* ----------------------------------------------------------------- */
-    struct semaphore child_lock;
-    struct semaphore mem_lock;
-    struct list child;
-    struct list_elem child_elem;
-    int exit_status;
-    struct file* fd[128];
+    /* project2(1) - thread.h */
+    struct semaphore child_lock;	// for waiting child lock
+    struct semaphore mem_lock;		// for waiting memory lock
+    struct semaphore load_lock;		// for waiting load lock
+    struct thread* parent;		// parent
+    struct list child;			// child
+    struct list_elem child_elem;	// child element
+    int exit_status;			// exit status for exit
+    struct file* fd[128];		// file, limit is 128
     /* ----------------------------------------------------------------- */
 
 #endif

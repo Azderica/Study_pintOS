@@ -10,14 +10,18 @@
 static void syscall_handler (struct intr_frame *);
 
 /* ----------------------------------------------------------------- */
-typedef int pid_t;
+/* project2(1) - syscall.c */
+typedef int pid_t;		// for exec
 
-struct file{
+struct file{			// struct file, this is in filesys/file.c
   struct inode *inode;
   off_t pos;
   bool deny_write;
 };
 
+struct lock file_lock;		// waiting load lock
+
+/* system call, this is in Stanford Page */
 void syscall_init (void);
 void halt (void);
 void exit (int status);
@@ -32,6 +36,7 @@ void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
 
+/* check user addr valid*/
 void is_user_addr_valid(const void *vaddr);
 
 /* ----------------------------------------------------------------- */
@@ -39,6 +44,7 @@ void is_user_addr_valid(const void *vaddr);
 void
 syscall_init (void) 
 {
+  lock_init(&file_lock);	// lock init
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -48,7 +54,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   //printf ("system call!\n");
   //thread_exit ();
   is_user_addr_valid(f->esp);  
-  is_user_addr_valid(f->esp + 20);
 
   switch (*(int *)(f->esp)) {
     case SYS_HALT:
@@ -98,7 +103,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_SEEK:
       is_user_addr_valid(f->esp + 4);
       is_user_addr_valid(f->esp + 8);
-      seek(*(int *)(f->esp + 16), *(int *)(f->esp + 20));
+      seek(*(int *)(f->esp + 4), *(int *)(f->esp + 8));  //4, 8
       break;
     case SYS_TELL:
       is_user_addr_valid(f->esp + 4);
@@ -150,10 +155,12 @@ bool remove (const char *file){
 
 int open (const char *file){
   int i;
+  int ret = -1;
   struct file* file_ptr;
   if (file == NULL)
     exit(-1);
   is_user_addr_valid(file);
+  lock_acquire(&file_lock);
   file_ptr = filesys_open(file);
   if(file_ptr != NULL) {
     for (i = 3; i < 128; i++) {
@@ -162,13 +169,15 @@ int open (const char *file){
           file_deny_write(file_ptr);
         }
         thread_current()->fd[i] = file_ptr;
-        return i;
+        ret = i;
+        break;
       }
     }
   } else {
-    return -1;
+    ret = -1;
   }
-  return -1;
+  lock_release(&file_lock);
+  return ret;
 }
 
 int filesize (int fd){
@@ -179,35 +188,46 @@ int filesize (int fd){
 
 int read (int fd, void* buffer, unsigned size){
   int i;
+  int ret;
   is_user_addr_valid(buffer);
+  lock_acquire(&file_lock);
   if (fd == 0) {
     for (i = 0; i < size; i++){
       if (((char *)buffer)[i] == '\0') {
         break;
       }
     }
+    ret = i;
   } else if (fd > 2) {
-    if (thread_current()->fd[fd] == NULL)
+    if (thread_current()->fd[fd] == NULL){
+      lock_release(&file_lock);
       exit(-1);
-    if (thread_current()->fd[fd]->deny_write != 0) {
-      file_deny_write(thread_current()->fd[fd]);
     }
-    return file_read(thread_current()->fd[fd], buffer, size);
+    ret = file_read(thread_current()->fd[fd], buffer, size);
   }
-  return i;
+  lock_release(&file_lock);
+  return ret;
 }
 
 int write (int fd, const void *buffer, unsigned size){
+  int ret = -1;
   is_user_addr_valid(buffer);
+  lock_acquire(&file_lock);
   if (fd == 1){
     putbuf(buffer, size);
-    return size;
+    ret = size;
   } else if (fd > 2) {
-    if (thread_current()->fd[fd] == NULL)
+    if (thread_current()->fd[fd] == NULL){
+      lock_release(&file_lock);
       exit(-1);
-    return file_write(thread_current()->fd[fd], buffer, size);
+    }
+    if (thread_current()->fd[fd]->deny_write) {
+      file_deny_write(thread_current()->fd[fd]);
+    }
+    ret = file_write(thread_current()->fd[fd], buffer, size);
   }
-  return -1;
+  lock_release(&file_lock);
+  return ret;
 }
 
 void seek (int fd, unsigned position){
@@ -231,7 +251,6 @@ void close (int fd){
   return file_close(thread_current()->fd[fd]);
 }
 
-/**/
 void is_user_addr_valid(const void *vaddr){
   if(!is_user_vaddr(vaddr)){
     exit(-1);

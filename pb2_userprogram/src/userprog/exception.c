@@ -150,6 +150,7 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
   /* ----------------------------------------------------------------- */
+  /* project2(1) - exception.c */
   if(!user || is_kernel_vaddr(fault_addr) || not_present)
     exit(-1);
   /* ----------------------------------------------------------------- */
