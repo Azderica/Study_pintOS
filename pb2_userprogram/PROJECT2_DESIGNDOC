@@ -7,71 +7,213 @@ Choi Jiwon    <acantos1@naver.com>
 
 ---- PRELIMINARIES ----
 >> Describe briefly which parts of the assignment were implemented by each member of your team and specify the contribution between
-your member, say 1:1:1 -> 1:1:1 
-Park Myunghun     : worked together
-Seok Chanhui      : worked together
-Choi Jiwon        : worked together
+your member, say 1:1:1 -> 1:1:1
+
+Park Myunghun     : ÄÚµå ±¸Çö ¹× ±â¼ú ¹®¼­ ÀÛ¼º
+Seok Chanhui      : ÄÚµå ±¸Çö ¹× ±â¼ú ¹®¼­ ÀÛ¼º
+Choi Jiwon        : ÄÚµå ±¸Çö ¹× ±â¼ú ¹®¼­ ÀÛ¼º
 
 /* meeting schedule*/
-first meeting     : 2019.04.09 19:30 ~ 22:00
-second meeting    : 2019.04.14 14:00 ~ 18:00
+first meeting     : 2019.05.08 19:00 ~ 22:00
+second meeting    : 2019.05.11 14:20 ~ 17:00
+third meeting    : 2019.05.15 17:00 ~ 18:00
 
-ALARM CLOCK
-===========
+
+ ARGUMENT PASSING
+ ================
 ---- DATA STRUCTURES ----
->> A1: Copy here the declaration of each new or changed `structâ€™ or `struct' member, global or static variable, `typedef', or enumeration.
-Identify the purpose of each in 25 words or less.
+A1: Copy here the declaration of each new or changed `struct' or `struct'
+member, global or static variable, `typedef', or enumeration. Identify the
+purpose of each in 25 words or less.
 
------------------------------------------------------------------------------------------------------------
-  <../src/threads/thread.h>
-  thread êµ¬ì¡°ì²´ì— int64_t í˜• ë³€ìˆ˜ napTime ì„ ì¶”ê°€í•´ ì£¼ì—ˆë‹¤.
-  ì´ê²ƒì€ ê° thread ë³„ë¡œ ì ìì•¼ í•˜ëŠ” ì‹œê°„(block ë˜ì–´ì•¼ í•˜ëŠ” ì‹œê°„)ì„ ì €ì¥í•˜ê¸° ìœ„í•´ ìƒˆë¡œ ì¶”ê°€í•œ ë©¤ë²„ì´ë‹¤.
------------------------------------------------------------------------------------------------------------
-  <../src/devices/timer.c>
-  = static struct list wait_queue; // ì ì¬ìš¸ ìŠ¤ë ˆë“œë“¤ì„ ë„£ì–´ ë†“ì„ wait queueë¥¼ ì „ì—­ìœ¼ë¡œ ì„ ì–¸ í•˜ì˜€ë‹¤.
-  = int ordered_func(const struct list_elem *L1, const struct list_elem *L2) // wait queueì— ë“¤ì–´ê°ˆ ë•Œ napTimeì´ ë”
-  ì‘ì€ ìŠ¤ë ˆë“œë“¤ ë¨¼ì € ì‚½ì…ë  ìˆ˜ ìˆë„ë¡ í•˜ëŠ” ì •ë ¬í•¨ìˆ˜ë¥¼ ì¶”ê°€í•˜ì˜€ë‹¤.
+[A1-1]
+struct list_elem* e; 
+struct thread* t;
+=> ÀÌ ±¸Á¶Ã¼µéÀº process waitingÀ» À§ÇØ Ãß°¡·Î ¼±¾ğÇÑ °ÍµéÀÔ´Ï´Ù.
+list¿¡ µé¾î ÀÖ´Â ½º·¹µåµéÀÇ »óÅÂ¸¦ Â÷·Ê´ë·Î »ìÆìº¸¸é¼­ exit status¸¦ È®ÀÎÇÕ´Ï´Ù. 
+ÀÌ´Â ºÎ¸ğ°¡ ÀÚ½ÄÀÇ Á¾·á »óÅÂ¸¦ È¸¼öÇÏ±â À§ÇÔÀÔ´Ï´Ù.
 
-  = void timer_sleep(int64_t ticks) :
-  ìŠ¤ë ˆë“œë¥¼ ë¸”ë¡í•˜ëŠ” ë¶€ë¶„ì„ ì´ í•¨ìˆ˜ì— êµ¬í˜„í•˜ì˜€ë‹¤.
-  [ì´ í•¨ìˆ˜ì— ì¶”ê°€í•œ ë¶€ë¶„]
-  - struct thread *WAIT; ë¥¼ ìƒˆë¡œ ì„ ì–¸
-  - WAITì— í˜„ì¬ ìŠ¤ë ˆë“œì •ë³´ ë¥¼ ëŒ€ì… (WAIT = thread_current();)
-  - WAIT->napTime = start + ticks; ì¶”ê°€ (í˜„ì¬ tickê³¼ ë„˜ê²¨ë°›ì€ ticksë¥¼ í•©ì³ ì–¼ë§ˆë‚˜ ì ìëŠ”ì§€(blockë˜ëŠ”ì§€)ì— ëŒ€í•œ ì‹œê°„ì •ë³´ë¥¼ ì €ì¥)
-  - list_insert_ordered(&wait_queue, &WAIT->elem, ordered_func, NULL); ì¶”ê°€
-    : wait queueì— napTimeì´ ë” ì‘ì€ ìŠ¤ë ˆë“œë“¤ ë¨¼ì € ì‚½ì…ë˜ë„ë¡ í•˜ê¸° ìœ„í•´ì„œì´ë‹¤.
-  - thread_block(); ì¶”ê°€
+char *parse_name, *saveptr;
+=> ArgumentµéÀ» parsing ÇÏ±â À§ÇØ ÇÊ¿äÇÑ º¯¼öµéÀ» ¼±¾ğÇÏ¿´½À´Ï´Ù.
+saveptr Àº strtok_r ÇÔ¼ö¸¦ »ç¿ëÇÒ ¶§ ÇÊ¿äÇÑ ¼¼ ¹øÂ° ÀÎÀÚ¿¡ µé¾î°¡´Â º¯¼öÀÔ´Ï´Ù. ¿©±â¿¡ ÀÚ¸£°í ³²Àº °á°ú¸¦ ÀúÀåÇÏ°í
+³ªÁß¿¡ »ç¿ëÇÒ ¼ö ÀÖ½À´Ï´Ù.
+void make_esp(char *file_name, void **esp) ÇÔ¼ö¿¡¼­´Â ³Ñ°Ü¹ŞÀº argumentµéÀ» °¡Áö°í stack ¿¡ ½×°Ô µË´Ï´Ù.
 
-  = static void timer_interrupt (struct intr_frame args UNUSED) :
-  íƒ€ì´ë¨¸ ì¸í„°ëŸ½íŠ¸ í•¨ìˆ˜ì—ì„œ ì£¼ê¸°ì ìœ¼ë¡œ unblock ì„ í†µí•´ ê¹¨ì›Œì•¼ í•˜ëŠ” ìŠ¤ë ˆë“œë“¤ì´ ìˆëŠ”ì§€ ì²´í¬í•˜ê³  ìˆìœ¼ë©´ ê¹¨ì›Œì£¼ë„ë¡ í•˜ì˜€ë‹¤.
-  [ì´ í•¨ìˆ˜ì— ì¶”ê°€í•œ ë¶€ë¶„]
-  - struct thread *WAIT; ë¥¼ ìƒˆë¡œ ì„ ì–¸
+[A1-2] <thread.h, thread.c> ¿¡ Ãß°¡ÀûÀ¸·Î ¼±¾ğÇÑ °ÍÀº ´ÙÀ½°ú °°½À´Ï´Ù. load ¸¦ À§ÇÑ semaphore ¸¦ Á¤ÀÇÇÕ´Ï´Ù.
+struct thread* parent; // parent thread
+struct semaphore load_lock; // for waiting load lock
+sema_init(&(t->load_lock), 0); // semaphore init, load_lock
 
-  - while(!list_empty(&wait_queue)){
-    WAIT = list_entry(list_begin(&wait_queue), struct thread, elem);
-  
-    if(WAIT->napTime <= timer_ticks()){
-
-     list_remove(&WAIT->elem);
-
-     thread_unblock(WAIT);
-    } 
-  else
-     break;
-   } ì¶”ê°€
-  (wait queue(ë¦¬ìŠ¤íŠ¸)ì— ì•„ë¬´ê²ƒë„ ì—†ì„ ë•Œê¹Œì§€ ê³„ì† whileë¬¸ì„ ëŒë©´ì„œ ì²´í¬)
-  (ë¦¬ìŠ¤íŠ¸ ë§¨ ì²«ë²ˆì§¸ ìš”ì†Œë¥¼ WAITì— ëŒ€ì…)
-  (ê·¸ ìš”ì†Œì˜ napTimeì´ í˜„ì¬ ì‹œê°„(timer_ticks()) ë³´ë‹¤ ì‘ê±°ë‚˜ ê°™ìœ¼ë©´ ê¹¨ì›Œì£¼ì–´ì•¼ í•˜ë‹ˆê¹Œ,
-  ë¦¬ìŠ¤íŠ¸ì—ì„œ ê·¸ ìš”ì†Œë¥¼ ì‚­ì œ (list_remove) í•œ ë‹¤ìŒ, ìŠ¤ë ˆë“œ ì–¸ë¸”ë¡ í•´ ì£¼ì—ˆë‹¤.)
------------------------------------------------------------------------------------------------------------
 
 ---- ALGORITHMS ----
->> A2: Briefly describe what happens in a call to timer_sleep(), including the effects of the timer interrupt handler.
-  ì¬ì›Œì•¼í•˜ëŠ” ì‹œê°„ê¹Œì§€ì˜ ì‹œê°„ ë§Œí¼ì„ thread structì˜ êµ¬ì¡°ì— ìˆëŠ” napTimeì— ì €ì¥í•œë‹¤.
-  ê·¸ í›„, ì´ë¥¼ ì´ì „ì— ì„ ì–¸í•œ wait_queueì— ì˜¤ë¦„ì°¨ìˆœìœ¼ë¡œ ì •ë ¬ì‹œì¼œ ë„£ì–´ì¤€ë‹¤.
-  ê·¸ ë‹¤ìŒì— thread block(í˜„ì¬ ì“°ë ˆë“œë¡¤ sleep ìƒíƒœë¡œ ë§Œë“œëŠ” ê²ƒ) ì²˜ë¦¬ë¥¼ í•´ì¤€ë‹¤.
+A2: Briefly describe how you implemented argument parsing. How do you arrange
+for the elements of argv[] to be in the right order? How do you avoid
+overflowing the stack page?
 
->> A3: What steps are taken to minimize the amount of time spent in the timer interrupt handler?
-  interruptì— ì†Œìš”ë˜ëŠ” ì‹œê°„ì„ ìµœì†Œí•˜ê¸° ìœ„í•´ì„œ, ê¸°ì¡´ì— queueì— ë„£ì„ ë•Œ tickì„ ì˜¤ë¦„ì°¨ìˆœìœ¼ë¡œ ì •ë ¬í•´ì„œ ë„£ëŠ”ë‹¤.
-  ê·¸ë˜ì„œ, ê¹¨ì›Œì•¼í•  ì• ë“¤ë§Œ ê¹¨ìš°ëŠ” êµ¬ì¡°ì´ë‹¤.
+[A2-1] parsingÀ» À§ÇÏ¿© strtok_r ÇÔ¼ö¸¦ »ç¿ëÇÏ¿´½À´Ï´Ù. ±×¸®°í argc´Â ÀÎÀÚÀÇ °¹¼ö¸¦ ÀúÀåÇÕ´Ï´Ù.
+strtok_rÀ» ÀÌ¿ëÇÏ¿© °ø¹é ¹®ÀÚ¸¦ ±âÁØÀ¸·Î ÀÚ¸¨´Ï´Ù.
+±×¸®°í for¹®À» "i = argc -1" ºÎÅÍ ½ÃÀÛÇÏ¿© "i°¡ 0 ÀÌ»óÀÏ ¶§"±îÁö i¸¦ 1¾¿ °¨¼Ò½ÃÅ°¸é¼­ loop¸¦ ÁøÇàÇÏ°í,
+loop ¾È¿¡¼­´Â argv[i] ¿¡ *esp °ªÀ» ÇÏ³ª¾¿ ´ëÀÔÇÕ´Ï´Ù.
+ÀÌ·¯ÇÑ ¹æ½ÄÀ¸·Î argument°¡ right-to-left order·Î argv[] ÀÇ ¿ä¼Òµé¿¡ µé¾î°©´Ï´Ù.
+
+Âü°í·Î, <syscall.c> ÀÇ void is_user_addr_valid(const void *vaddr); ÇÔ¼ö°¡ stack pageÀÇ oveflow¸¦ ÇÇÇÏ°Ô ÇØ Áİ´Ï´Ù.
+ÇÔ¼ö »ó¼¼´Â ´ÙÀ½°ú °°½À´Ï´Ù.
+void is_user_addr_valid(const void *vaddr){
+  if(!is_user_vaddr(vaddr)){
+    exit(-1);
+  }
+}
+
+
+ SYSTEM CALLS
+ ============
+---- DATA STRUCTURES ----
+B1: Copy here the declaration of each new or changed `struct' or `struct'
+member, global or static variable, `typedef', or enumeration. Identify the
+purpose of each in 25 words or less.
+
+[B1-1] <syscall.c>
+½Ã½ºÅÛ ÄİÀ» ±¸ÇöÇÏ±â À§ÇØ¼­ »õ·ÎÀÌ ¼±¾ğÇÑ °ÍµéÀÌ ¸¹±â¿¡, data strucure »Ó¸¸ ¾Æ´Ï¶ó »õ·Î¿î ÇÔ¼öµéµµ ¹Ø¿¡ ¸ğµÎ Àû¾ú½À´Ï´Ù.
+typedef int pid_t;
+struct lock file_lock;	// waiting load lock
+void syscall_init (void);
+void halt (void);
+void exit (int status);
+pid_t exec (const char *cmd_lime);
+int wait (pid_t pid);
+bool create (const char *file, unsigned initial_size);
+bool remove (const char *file);
+int open (const char *file); int filesize (int fd);
+int read (int fd, void *buffer, unsigned size);
+int write (int fd, const void *buffer, unsigned size);
+void seek (int fd, unsigned position);
+unsigned tell (int fd);
+void close (int fd);
+void is_user_addr_valid(const void *vaddr);
+static void syscall_handler (struct intr_frame *); // system call handler
+
+
+B2: Describe how file descriptors are associated with open files. Are file
+descriptors unique within the entire OS or just within a single process?
+
+[B2-1]  ÆÄÀÏÀÌ ¿ÀÇÂµÇ¸é ÇöÀç ÇÁ·Î¼¼½ºÀÇ ¿­¸° ÆÄÀÏ¸ñ·Ï¿¡ ÀÌ ÆÄÀÏÀÌ Ãß°¡µÇ°í, °íÀ¯ÇÑ file descriptor°¡ ÇÒ´çµË´Ï´Ù.
+Áï, file descriptor´Â ´ÜÀÏ ÇÁ·Î¼¼½º ³»¿¡¼­¸¸ °íÀ¯ÇÕ´Ï´Ù.
+ÆÄÀÏÀÌ ´İÈ÷¸é file descriptor´Â ÇÒ´çÀÌ ÇØÁ¦µÇ¸ç ³ªÁß¿¡ ´Ù¸¥ÆÄÀÏ¿¡ ÀÇÇØ Àç»ç¿ëµÉ ¼ö ÀÖ½À´Ï´Ù.
+µ¿ÀÏÇÑ ÆÄÀÏÀÌ ¹İº¹ÀûÀ¸·Î ¿­¸®¸é ¸Å¹ø »õ·Î¿î file descriptor°¡ ÇÒ´çµË´Ï´Ù.
+
+
+---- ALGORITHMS ----
+B3: Describe your code for reading and writing user data from the kernel.
+
+[B3-1] write, read ÇÔ¼ö¸¦ ÅëÇØ °£·«ÇÑ ¼³¸íÀ» ÇÏ°Ú½À´Ï´Ù.
+int write (int fd, const void *buffer, unsigned size){
+  int ret = -1;
+  is_user_addr_valid(buffer);    //check user addr valid
+  lock_acquire(&file_lock);     //µ¿±âÈ­¸¦ À§ÇØ lockÀ» °É¾îÁÜ
+  if (fd == 1){     //Ç¥ÁØ Ãâ·ÂÀÏ°æ¿ì buffer¿¡ ½áÁØÈÄ size¸¸Å­ return°ª¿¡ ³Ö¾îÁÜ
+    putbuf(buffer, size);
+    ret = size;
+  } else if (fd > 2) {    //ÆÄÀÏÀÏ °æ¿ì
+    if (thread_current()->fd[fd] == NULL){  //ºñ¾ùÀ» °æ¿ì lockÇØÁ¦ ÈÄ Á¾·á
+      lock_release(&file_lock);
+      exit(-1);
+    }
+    if (thread_current()->fd[fd]->deny_write) { //ÀÖÀ»°æ¿ì ÆÄÀÏ¿¡ ½áÁØ ÈÄ size¸¸Å­ return°ª¿¡ ³Ö¾îÁÜ
+      file_deny_write(thread_current()->fd[fd]);
+    }
+    ret = file_write(thread_current()->fd[fd], buffer, size);
+  }
+  lock_release(&file_lock);
+  return ret; //lockÇØÁ¦ÈÄ return
+}
+
+int read (int fd, void* buffer, unsigned size){
+  int i;
+  int ret;
+  is_user_addr_valid(buffer);  //check user addr valid
+  lock_acquire(&file_lock);  //µ¿±âÈ­¸¦ À§ÇØ lockÀ» °É¾îÁÜ
+  if (fd == 0) {  //Ç¥ÁØÀÔ·ÂÀÏ°æ¿ì
+    for (i = 0; i < size; i++){  //´ÙÀĞÀº ÈÄ Á¾·áÁöÁ¡À» return°ª¿¡ ³Ö¾îÁÜ
+      if (((char *)buffer)[i] == '\0') {  
+        break;
+      }
+    }
+    ret = i;
+  } else if (fd > 2) { //ÆÄÀÏÀÏ °æ¿ì
+    if (thread_current()->fd[fd] == NULL){ //ºñ¾ùÀ» °æ¿ì lockÇØÁ¦ ÈÄ Á¾·á
+      lock_release(&file_lock);
+      exit(-1);
+    }
+    ret = file_read(thread_current()->fd[fd], buffer, size); //ÀÖÀ»°æ¿ì ÆÄÀÏÀ» ÀĞ°í size¸¸Å­ return°ª¿¡ ³Ö¾îÁÜ
+  }
+  lock_release(&file_lock);
+  return ret; //lockÇØÁ¦ÈÄ return
+}
+
+
+
+B4: Briefly describe your implementation of each system call.
+
+[B4-1] ±âÁ¸ÀÇ pintos ¿¡ ÀÖ´Â <syscall.c> ¿¡´Â °ÅÀÇ ±¸ÇöµÈ »çÇ×ÀÌ ¾ø¾ú½À´Ï´Ù.
+°¢ system call ¸¶´Ù handler¸¦ ¸ğµÎ ±¸ÇöÇÏ¿´½À´Ï´Ù.
+system call handler¸¦ ±¸ÇöÇÑ ÇÔ¼ö´Â static void syscall_handler (struct intr_frame *f UNUSED); ÀÔ´Ï´Ù.
+ÇØ´ç ÇÔ¼ö¿¡¼­´Â Å©°Ô,
+
+1. is_user_addr_valid ÇÔ¼ö¸¦ ÅëÇÏ¿© ¸Ş¸ğ¸® ÁÖ¼ÒÀÇ À¯È¿¼ºÀ» ÆÇ´ÜÇÏ¸ç,
+2. system call ÇÔ¼öÀÇ °¢ ÇÔ¼ö¸¦ È£ÃâÇÏ°í, °á°ú°ªÀ» eax Æ÷ÀÎÅÍ(½ºÅÃ Æ÷ÀÎÅÍ)¿¡ ÀúÀåÇÏ´Â ¿ªÇÒ
+À» ¼öÇàÇÏ°Ô µË´Ï´Ù.
+
+ÇÚµé·¯ ÇÔ¼ö¿¡¼­´Â switch ¹®À¸·Î °¢ case º°·Î (SYS_HALT, SYS_EXIT, SYS_EXEC, SYS_WAIT, SYS_CREATE, SYS_REMOVE,
+SYS_OPEN, SYS_FILESIZE, SYS_READ, SYS_WRITE, SYS_SEEK, SYS_TELL, SYS_CLOSE) ´Ù·ç°Ô²û ÇÏ¿´À¸¸ç
+ÀÌ¿¡ ÇÊ¿äÇÑ ÇÔ¼öµé (halt, exit, wait, create, remove, open, filesize, read, write, seek, tell, close) µéÀ» ÀÛ¼ºÇÏ¿´½À´Ï´Ù.
+
+[ÇÔ¼ö] void halt(void);
+[¼³¸í] shutdown_power_off ÇÔ¼ö¸¦ È£ÃâÇÕ´Ï´Ù.
+
+[ÇÔ¼ö] void exit(int status);
+[¼³¸í] ÇöÀç ½º·¹µåÀÇ exit_status¿¡ status°ª ÀúÀå, Á¾·á¸¦ È®ÀÎÇÒ ¼ö ÀÖµµ·Ï printf·Î Ãâ·Â.
+¶ÇÇÑ, ÇöÀç ½º·¹µå¿¡ Æ÷ÇÔµÈ ÆÄÀÏÀº ¸ğµÎ close ÇÏµµ·Ï ÇØ¼­ page fault¸¦ ¸·½À´Ï´Ù.
+
+[ÇÔ¼ö] pid_t exec(const char *cmd_line);
+[¼³¸í] <process.c> ¿¡ Á¤ÀÇµÈ process_execute ÇÔ¼ö¸¦ È£ÃâÇØ »õ ÇÁ·Î¼¼½º¸¦ ¸¸µé°í
+tid °ªÀ» ÀúÀåÇÑ´Ù.
+
+[ÇÔ¼ö] int wait(pid_t pid);
+[¼³¸í] <process.c> ¿¡ Á¤ÀÇµÈ process_wait ÇÔ¼ö¸¦ ÅëÇØ, ÇöÀç ½º·¹µå¿¡ ÀúÀåµÈ childÀÇ pid°¡ ÀÎÀÚ·Î ³Ñ°Ü¹ŞÀº pid°ª°ú ÀÏÄ¡ÇÏ´Â ½º·¹µå¸¦ wait ÇÏ°Ô²û ÇÑ´Ù.
+
+[ÇÔ¼ö] bool create (const char *file, unsigned initial_size); 
+[¼³¸í] fileÀÌ NULLÀÌ ¾Æ´Ò ¶§¸¸ filesys_create ·Î file »ı¼ºÀ» ¼öÇàÇÕ´Ï´Ù.
+
+[ÇÔ¼ö] bool remove (const char *file);
+[¼³¸í] fileÀÌ NULLÀÌ ¾Æ´Ò ¶§¸¸ filesys_remove ·Î file »èÁ¦¸¦ ¼öÇàÇÕ´Ï´Ù.
+
+[ÇÔ¼ö] int open(const char *file);
+[¼³¸í] fileÀÌ NULLÀÌ ¾Æ´Ï¶ó¸é ÆÄÀÏÀ» ¿±´Ï´Ù. ¿©±â¼­´Â lock_acquire(&file_lock); °ú ³¡¿¡ lock_release(&file_lock);À» ÅëÇØ
+lockÀ» °¡Áø ½º·¹µå¸¸ ÁøÀÔÇÒ ¼ö ÀÖµµ·Ï ÇÏ¿© synchronizationÀ» ±¸ÇöÇÕ´Ï´Ù.  file_deny_write ÇÔ¼ö´Â ÀÌ¹Ì loadµÈ ½ÇÇà °¡´ÉÇÑ
+ÆÄÀÏ¿¡ ´Ù¸¥ °ªµéÀÌ µ¤¾î¾º¿öÁ® º¯°æµÇÁö ¾Êµµ·Ï ÇÏ´Â ¿ªÇÒÀ» ÇÕ´Ï´Ù.
+
+[ÇÔ¼ö] int read (int fd, void* buffer, unsigned size);
+[¼³¸í] ÆÄÀÏ µğ½ºÅ©¸³ÅÍ °ªÀÌ STDIN(Standard Input) À» ³ªÅ¸³»´Â 0 ÀÏ¶§´Â char °ªÀ» ¹öÆÛ¿¡ ¹Ş¾Æ ÀúÀåÇÕ´Ï´Ù.
+ÆÄÀÏ µğ½ºÅ©¸³ÅÍ °ªÀÌ 2º¸´Ù Å« °ªÀÌ¸é, ÆÄÀÏ µğ½ºÅ©¸³ÅÍ(fd) °ª¿¡ ¸Â´Â fileÀ» file_read ·Î ÀĞ½À´Ï´Ù.
+open ÇÔ¼ö ³»ºÎ¿¡¼­¿Í ¸¶Âù°¡Áö·Î synchronizationÀ» À§ÇØ Ã³À½°ú ³¡¿¡ lock_acquire, lock_release¸¦ ÀÛ¼ºÇÕ´Ï´Ù.
+
+[ÇÔ¼ö] int filesize (int fd);
+[¼³¸í] ÇØ´çÇÏ´Â ÆÄÀÏÀÇ »çÀÌÁî¸¦ ¹İÈ¯ÇÕ´Ï´Ù.
+
+[ÇÔ¼ö] int write (int fd, const void *buffer, unsigned size);
+[¼³¸í] ÆÄÀÏ µğ½ºÅ©¸³ÅÍ °ªÀÌ STDOUT(Standard Output) À» ³ªÅ¸³»´Â 1 ÀÏ¶§´Â putbuf ÇÔ¼ö·Î ¹öÆÛ¿¡ µ¥ÀÌÅÍ¸¦ ÀúÀåÇÕ´Ï´Ù.
+ÆÄÀÏ µğ½ºÅ©¸³ÅÍ °ªÀÌ 2º¸´Ù Å« °ªÀÌ¸é, ÆÄÀÏ µğ½ºÅ©¸³ÅÍ(fd) °ª¿¡ ¸Â´Â fileÀ» file_write·Î ¾¹´Ï´Ù.
+¸¶Âù°¡Áö·Î synchronizationÀ» À§ÇØ Ã³À½°ú ³¡¿¡ lock_acquire, lock_release¸¦ ÀÛ¼ºÇÕ´Ï´Ù.
+
+[ÇÔ¼ö] void seek(int fd, unsigned position);
+[¼³¸í] ÆÄÀÏ µğ½ºÅ©¸³ÅÍ(fd) °ª¿¡ ÇØ´çÇÏ´Â ÆÄÀÏÀÌ ¾ø´Ù¸é exit(-1); À» È£ÃâÇÏ°í, ÀÖ´Ù¸é file_seek ÇÔ¼ö¸¦ ÀÌ¿ëÇØ poisiton °ªÀ¸·Î À§Ä¡¸¦
+º¯°æ ¹× ¼³Á¤ÇØ Áİ´Ï´Ù.
+
+[ÇÔ¼ö] unsigned tell (int fd);
+[¼³¸í] fd °ª¿¡ ÇØ´çÇÏ´Â ÆÄÀÏÀÌ ¾øÀ¸¸é exit(-1);À» È£ÃâÇÏ°í, ÀÖÀ¸¸é file_tell ÇÔ¼ö¸¦ ÀÌ¿ëÇØ ÇöÀç ÆÄÀÏÀÇ position °ªÀ» ¹İÈ¯ÇÕ´Ï´Ù.
+
+[ÇÔ¼ö] void close (int fd);
+[¼³¸í] ÇöÀç ½º·¹µåÀÇ fd °ªÀÌ NULLÀÌ¸é exit(-1);À» È£ÃâÇÏ°í, ¾Æ´Ï¸é file_close ÇÔ¼ö¸¦ ÅëÇØ ´İ½À´Ï´Ù.
+
+
 
