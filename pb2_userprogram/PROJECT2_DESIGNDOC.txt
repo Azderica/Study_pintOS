@@ -213,3 +213,4 @@ open 함수 내부에서와 마찬가지로 synchronization을 위해 처음과 끝에 lock_acquire,
 
 [함수] void close (int fd);
 [설명] 현재 스레드의 fd 값이 NULL이면 exit(-1);을 호출하고, 아니면 file_close 함수를 통해 닫습니다.
+
