@@ -1,0 +1,218 @@
+---- GROUP ----
+>> Fill in the names and email addresses of your group members.
+
+Park Myunghun <mh97888@gmail.com>
+Seok Chanhui  <chanhuicom@gmail.com>
+Choi Jiwon    <acantos1@naver.com>
+
+---- PRELIMINARIES ----
+>> Describe briefly which parts of the assignment were implemented by each member of your team and specify the contribution between
+your member, say 1:1:1 -> 1:1:1
+
+Park Myunghun     : 코드 구현 및 기술 문서 작성
+Seok Chanhui      : 코드 구현 및 기술 문서 작성
+Choi Jiwon        : 코드 구현 및 기술 문서 작성
+
+/* meeting schedule*/
+first meeting     : 2019.05.08 19:00 ~ 22:00
+second meeting    : 2019.05.11 14:20 ~ 17:00
+third meeting    : 2019.05.15 17:00 ~ 18:00
+
+
+ ARGUMENT PASSING
+ ================
+---- DATA STRUCTURES ----
+A1: Copy here the declaration of each new or changed `struct' or `struct'
+member, global or static variable, `typedef', or enumeration. Identify the
+purpose of each in 25 words or less.
+
+[A1-1]
+struct list_elem* e; 
+struct thread* t;
+=> 이 구조체들은 process waiting을 위해 추가로 선언한 것들입니다.
+list에 들어 있는 스레드들의 상태를 차례대로 살펴보면서 exit status를 확인합니다. 
+이는 부모가 자식의 종료 상태를 회수하기 위함입니다.
+
+char *parse_name, *saveptr;
+=> Argument들을 parsing 하기 위해 필요한 변수들을 선언하였습니다.
+saveptr 은 strtok_r 함수를 사용할 때 필요한 세 번째 인자에 들어가는 변수입니다. 여기에 자르고 남은 결과를 저장하고
+나중에 사용할 수 있습니다.
+void make_esp(char *file_name, void **esp) 함수에서는 넘겨받은 argument들을 가지고 stack 에 쌓게 됩니다.
+
+[A1-2] <thread.h, thread.c> 에 추가적으로 선언한 것은 다음과 같습니다. load 를 위한 semaphore 를 정의합니다.
+struct thread* parent; // parent thread
+struct semaphore load_lock; // for waiting load lock
+sema_init(&(t->load_lock), 0); // semaphore init, load_lock
+
+
+---- ALGORITHMS ----
+A2: Briefly describe how you implemented argument parsing. How do you arrange
+for the elements of argv[] to be in the right order? How do you avoid
+overflowing the stack page?
+
+[A2-1] parsing을 위하여 strtok_r 함수를 사용하였습니다. 그리고 argc는 인자의 갯수를 저장합니다.
+strtok_r을 이용하여 공백 문자를 기준으로 자릅니다.
+그리고 for문을 "i = argc -1" 부터 시작하여 "i가 0 이상일 때"까지 i를 1씩 감소시키면서 loop를 진행하고,
+loop 안에서는 argv[i] 에 *esp 값을 하나씩 대입합니다.
+이러한 방식으로 argument가 right-to-left order로 argv[] 의 요소들에 들어갑니다.
+
+참고로, <syscall.c> 의 void is_user_addr_valid(const void *vaddr); 함수가 stack page의 oveflow를 피하게 해 줍니다.
+함수 상세는 다음과 같습니다.
+void is_user_addr_valid(const void *vaddr){
+  if(!is_user_vaddr(vaddr)){
+    exit(-1);
+  }
+}
+
+
+ SYSTEM CALLS
+ ============
+---- DATA STRUCTURES ----
+B1: Copy here the declaration of each new or changed `struct' or `struct'
+member, global or static variable, `typedef', or enumeration. Identify the
+purpose of each in 25 words or less.
+
+[B1-1] <syscall.c>
+시스템 콜을 구현하기 위해서 새로이 선언한 것들이 많기에, data strucure 뿐만 아니라 새로운 함수들도 밑에 모두 적었습니다.
+typedef int pid_t;
+struct lock file_lock;	// waiting load lock
+void syscall_init (void);
+void halt (void);
+void exit (int status);
+pid_t exec (const char *cmd_lime);
+int wait (pid_t pid);
+bool create (const char *file, unsigned initial_size);
+bool remove (const char *file);
+int open (const char *file); int filesize (int fd);
+int read (int fd, void *buffer, unsigned size);
+int write (int fd, const void *buffer, unsigned size);
+void seek (int fd, unsigned position);
+unsigned tell (int fd);
+void close (int fd);
+void is_user_addr_valid(const void *vaddr);
+static void syscall_handler (struct intr_frame *); // system call handler
+
+
+B2: Describe how file descriptors are associated with open files. Are file
+descriptors unique within the entire OS or just within a single process?
+[B2-1]  파일이 오픈되면 현재 프로세스의 열린 파일목록에 이 파일이 추가되고, 고유한 file descriptor가 할당됩니다.
+즉, file descriptor는 단일 프로세스 내에서만 고유합니다.
+파일이 닫히면 file descriptor는 할당이 해제되며 나중에 다른파일에 의해 재사용될 수 있습니다.
+동일한 파일이 반복적으로 열리면 매번 새로운 file descriptor가 할당됩니다.
+
+
+---- ALGORITHMS ----
+B3: Describe your code for reading and writing user data from the kernel.
+
+[B3-1] write, read 함수를 통해 간략한 설명을 하겠습니다.
+int write (int fd, const void *buffer, unsigned size){
+  int ret = -1;
+  is_user_addr_valid(buffer);    //check user addr valid
+  lock_acquire(&file_lock);     //동기화를 위해 lock을 걸어줌
+  if (fd == 1){     //표준 출력일경우 buffer에 써준후 size만큼 return값에 넣어줌
+    putbuf(buffer, size);
+    ret = size;
+  } else if (fd > 2) {    //파일일 경우
+    if (thread_current()->fd[fd] == NULL){  //비었을 경우 lock해제 후 종료
+      lock_release(&file_lock);
+      exit(-1);
+    }
+    if (thread_current()->fd[fd]->deny_write) { //있을경우 파일에 써준 후 size만큼 return값에 넣어줌
+      file_deny_write(thread_current()->fd[fd]);
+    }
+    ret = file_write(thread_current()->fd[fd], buffer, size);
+  }
+  lock_release(&file_lock);
+  return ret; //lock해제후 return
+}
+
+int read (int fd, void* buffer, unsigned size){
+  int i;
+  int ret;
+  is_user_addr_valid(buffer);  //check user addr valid
+  lock_acquire(&file_lock);  //동기화를 위해 lock을 걸어줌
+  if (fd == 0) {  //표준입력일경우
+    for (i = 0; i < size; i++){  //다읽은 후 종료지점을 return값에 넣어줌
+      if (((char *)buffer)[i] == '\0') {  
+        break;
+      }
+    }
+    ret = i;
+  } else if (fd > 2) { //파일일 경우
+    if (thread_current()->fd[fd] == NULL){ //비엇을 경우 lock해제 후 종료
+      lock_release(&file_lock);
+      exit(-1);
+    }
+    ret = file_read(thread_current()->fd[fd], buffer, size); //있을경우 파일을 읽고 size만큼 return값에 넣어줌
+  }
+  lock_release(&file_lock);
+  return ret; //lock해제후 return
+}
+
+
+
+B4: Briefly describe your implementation of each system call.
+
+[B4-1] 기존의 pintos 에 있는 <syscall.c> 에는 거의 구현된 사항이 없었습니다.
+각 system call 마다 handler를 모두 구현하였습니다.
+system call handler를 구현한 함수는 static void syscall_handler (struct intr_frame *f UNUSED); 입니다.
+해당 함수에서는 크게,
+
+1. is_user_addr_valid 함수를 통하여 메모리 주소의 유효성을 판단하며,
+2. system call 함수의 각 함수를 호출하고, 결과값을 eax 포인터(스택 포인터)에 저장하는 역할
+을 수행하게 됩니다.
+
+핸들러 함수에서는 switch 문으로 각 case 별로 (SYS_HALT, SYS_EXIT, SYS_EXEC, SYS_WAIT, SYS_CREATE, SYS_REMOVE,
+SYS_OPEN, SYS_FILESIZE, SYS_READ, SYS_WRITE, SYS_SEEK, SYS_TELL, SYS_CLOSE) 다루게끔 하였으며
+이에 필요한 함수들 (halt, exit, wait, create, remove, open, filesize, read, write, seek, tell, close) 들을 작성하였습니다.
+
+[함수] void halt(void);
+[설명] shutdown_power_off 함수를 호출합니다.
+
+[함수] void exit(int status);
+[설명] 현재 스레드의 exit_status에 status값 저장, 종료를 확인할 수 있도록 printf로 출력.
+또한, 현재 스레드에 포함된 파일은 모두 close 하도록 해서 page fault를 막습니다.
+
+[함수] pid_t exec(const char *cmd_line);
+[설명] <process.c> 에 정의된 process_execute 함수를 호출해 새 프로세스를 만들고
+tid 값을 저장한다.
+
+[함수] int wait(pid_t pid);
+[설명] <process.c> 에 정의된 process_wait 함수를 통해, 현재 스레드에 저장된 child의 pid가 인자로 넘겨받은 pid값과 일치하는 스레드를 wait 하게끔 한다.
+
+[함수] bool create (const char *file, unsigned initial_size); 
+[설명] file이 NULL이 아닐 때만 filesys_create 로 file 생성을 수행합니다.
+
+[함수] bool remove (const char *file);
+[설명] file이 NULL이 아닐 때만 filesys_remove 로 file 삭제를 수행합니다.
+
+[함수] int open(const char *file);
+[설명] file이 NULL이 아니라면 파일을 엽니다. 여기서는 lock_acquire(&file_lock); 과 끝에 lock_release(&file_lock);을 통해
+lock을 가진 스레드만 진입할 수 있도록 하여 synchronization을 구현합니다.  file_deny_write 함수는 이미 load된 실행 가능한
+파일에 다른 값들이 덮어씌워져 변경되지 않도록 하는 역할을 합니다.
+
+[함수] int read (int fd, void* buffer, unsigned size);
+[설명] 파일 디스크립터 값이 STDIN(Standard Input) 을 나타내는 0 일때는 char 값을 버퍼에 받아 저장합니다.
+파일 디스크립터 값이 2보다 큰 값이면, 파일 디스크립터(fd) 값에 맞는 file을 file_read 로 읽습니다.
+open 함수 내부에서와 마찬가지로 synchronization을 위해 처음과 끝에 lock_acquire, lock_release를 작성합니다.
+
+[함수] int filesize (int fd);
+[설명] 해당하는 파일의 사이즈를 반환합니다.
+
+[함수] int write (int fd, const void *buffer, unsigned size);
+[설명] 파일 디스크립터 값이 STDOUT(Standard Output) 을 나타내는 1 일때는 putbuf 함수로 버퍼에 데이터를 저장합니다.
+파일 디스크립터 값이 2보다 큰 값이면, 파일 디스크립터(fd) 값에 맞는 file을 file_write로 씁니다.
+마찬가지로 synchronization을 위해 처음과 끝에 lock_acquire, lock_release를 작성합니다.
+
+[함수] void seek(int fd, unsigned position);
+[설명] 파일 디스크립터(fd) 값에 해당하는 파일이 없다면 exit(-1); 을 호출하고, 있다면 file_seek 함수를 이용해 poisiton 값으로 위치를
+변경 및 설정해 줍니다.
+
+[함수] unsigned tell (int fd);
+[설명] fd 값에 해당하는 파일이 없으면 exit(-1);을 호출하고, 있으면 file_tell 함수를 이용해 현재 파일의 position 값을 반환합니다.
+
+[함수] void close (int fd);
+[설명] 현재 스레드의 fd 값이 NULL이면 exit(-1);을 호출하고, 아니면 file_close 함수를 통해 닫습니다.
+
+
+
