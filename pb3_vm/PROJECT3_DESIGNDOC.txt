@@ -1,0 +1,233 @@
+<Project 3 : Virtual Memory>
+Design Document
+
+
+
+===== Group
+Park Myunghun <mh97888@gmail.com>
+Seok Chanhui  <chanhuicom@gmail.com>
+Choi Jiwon    <acantos1@naver.com>
+
+Park Myunghun  : 코드 구현 및 기술 문서 작성
+Seok Chanhui    : 코드 구현 및 기술 문서 작성
+Choi Jiwon       : 코드 구현 및 기술 문서 작성
+
+
+===== meeting schedule
+first meeting     : 2019.06.02 18:00 ~ 21:30
+second meeting  : 2019.06.04 22:10 ~ 23:30
+third meeting    : 2019.06.05 20:00 ~ 2019.06.06. 09:00
+last meeting     : 2019.06.18. 20:10 ~ 21:30
+
+
+프로젝트 3은 pintos/src/vm 밑에 구현을 해서 test를 돌리게 됩니다.
+페이지 테이블을 관리하기 위해 새로 추가한 파일 및 Data Structures 는 다음과 같습니다.
+<page.h> <page.c>
+<frame.h> <frame.c>
+<swap.h> <swap.c>
+
+즉 꼭 필요한 page, frame, swap을 구현합니다.
+
+1. <page.h> 에는 페이지와 관련된 structure 들을 선언하였습니다.
+struct page 
+  {
+    /* Immutable members. */
+    void *addr;                 /* User virtual address. */
+    bool read_only;             /* Read-only page? */
+    struct thread *thread;      /* Owning thread. */
+
+    /* Accessed only in owning process context. */
+    struct hash_elem hash_elem; /* struct thread `pages' hash element. */
+
+    /* Set only in owning process context with frame->frame_lock held.
+       Cleared only with scan_lock and frame->frame_lock held. */
+    struct frame *frame;        /* Page frame. */
+
+    /* Swap information, protected by frame->frame_lock. */
+    block_sector_t sector;       /* Starting sector of swap area, or -1. */
+    
+    /* Memory-mapped file information, protected by frame->frame_lock. */
+    bool private;               /* False to write back to file,
+                                   true to write back to swap. */
+    struct file *file;          /* File. */
+    off_t file_offset;          /* Offset in file. */
+    off_t file_bytes;           /* Bytes to read/write, 1...PGSIZE. */
+  };
+
+
+struct page *page_allocate (void *, bool read_only);
+void page_deallocate (void *vaddr);
+-> 페이지를 할당하고, 해제할 수 있도록 선언한 함수입니다.
+
+bool page_in (void *fault_addr);
+bool page_out (struct page *);
+bool page_accessed_recently (struct page *);
+-> page in은 swap 공간에 있는 내용을 다시 메모리로 불러와서 페이지 프레임을 제공하며, page out은 사용 중인 페이지 프레임의 내용을 swap에 저장 후, 그 페이지 프레임을 현재 필요로 하고 있는 다른 프로그램에 주는 것을 말합니다.
+이를 위해 bool 타입의 page_in과 page_out을 구현합니다. 
+ page_accessed_recently 함수는 최근에 접근한 페이지인지 알 수 있도록 만든 함수입니다. 최근에 액세스 되지 않은 페이지인 경우에는, 해당 페이지는 프레임에서 제거되고, 새로운 페이지가 들어갈 수 있도록 해야 하기 때문입니다.
+
+
+2. <frame.h> 는 다음과 같습니다.
+- frame 구조체 선언
+struct frame 
+  {
+    struct lock lock;           
+    void *base;                 
+    struct page *page;         
+  };
+동시 접근을 막기 위한 lock, 그리고 virtual address의 base address, 페이지와 매핑하기 위한 page 구조체 포인터를 선언합니다.
+frame.h 도 page.h 와 비슷하게 lock, unlock 함수를 기본으로 작성하고 frame을 해제하는 free 함수도 구현합니다. (void frame_free (struct frame *) )
+
+3. <swap.h> 는 swap_in, swap_out을 구현합니다.
+swap 개념은, 어떤 프로그램은 실행되려면 반드시 메모리에 올라가야 하는데, 메모리가 부족할 경우 프로세스가 잠시 저장장치(hard disk 또는 ssd)에 가게 되는데 이것을 swap out이라고 합니다. 그리고 다시 메모리로 돌아올 경우는 swap in이라고 합니다. 
+즉, 프레임이 필요한데 여유 공간이 없다면, 최근에 프레임의 페이지들 중 액세스되지 않은 페이지를 프레임에서 빼고(evict), 새로 들어갈 페이지를 삽입하게 됩니다.
+
+
+Part 1. Page Table management
+==============================
+Paging을 구현하기 위해 먼저 Page Fault Handler 쪽을 살펴봅니다.
+(threads/palloc.h를 보면 page allocator가 정의되어 있고, 이를 통해 page 단위로 메모리를 할당합니다.)  또한 핀토스에는 기존에 /userprog/exception.c에서 Page Fault 에 대한 구현이 존재합니다.
+
+하지만 Demanding Paging 방식이 구현되어 있지 않습니다.
+이에 대한 부분이 핀토스에 존재하지 않으므로 vm 디렉토리 밑에 추가한 뒤 exception.c에는 헤더파일을 추가합니다. -> EX: (+) /vm/page.h
+
+page.c 에는 bool type의 page in 기능을 하는 함수를 만들며, 가상 메모리에 frame에 할당해 주는 내용을 구현하게 됩니다. 
+success = pagedir_set_page (thread_current ()->pagedir, p->addr,
+                              p->frame->base, !p->read_only);
+success는 bool type이며, pagedir_set_page는 /userprog/pagedir.c 에 이미  있습니다. (pagedir.c 에서는 페이지 테이블을 관리하는 코드들을 제공하고 있습니다.)
+
+이를 잠시 살펴보면,
+
+pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable);
+user virtual page인 upage를 physical frame 역할인 kernel virtual address KPAGE에 할당해 주는 함수입니다.
+
+page out 도 필요한데 이 또한 page.c에 구현합니다.
+먼저, victim으로 선정한 페이지에 대하여 /userprog/pagedir.c 에 존재하는 pagedir_clear_page 함수를 사용합니다.
+
+pagedir_clear_page(p->thread->pagedir, p->addr);
+그러면 먼저 페이지 테이블에서 없어지므로(not present) 해당 페이지는 page fault 가 될 것입니다.
+
+dirty = pagedir_is_dirty(p->thread->pagedir, p->addr);
+그 후 /userprog/pagedir.c 에 존재하는 pagedir_is_dirty 함수를 통해 해당 페이지가 이전에 수정된 바 있는지 검사합니다. 
+
+이렇게 주요 기능을 구현한 것들 중 page_out은 /vm/frame.c에서 사용하게 됩니다.
+</vm/frame.c> static struct frame *
+try_frame_alloc_and_lock (struct page *page) {
+...
+
+할당할 frame을 찾는데 만약 free한 frame이 하나도 없으면 victim으로 선정할 것을 for문을 이용하여 탐색하면서 찾습니다.
+페이지가 최근 액세스 되지 않았다면 그것을 찾아 고릅니다.
+if(page_accessed_recently (f->page) ...
+
+      if (!page_out (f->page))
+        {
+          lock_release (&f->lock);
+          return NULL;
+        }
+이후 victim 대상으로 고른 f->page를 page_out 해 줍니다.
+
+</userprog/exception.c>
+  if (user && not_present)
+    {
+      if (!page_in (fault_addr))
+        thread_exit();
+      return;
+    }
+page_in 함수는 /userprog/exception.c 안에서 page_fault 핸들러 부분에 구현을 하게 됩니다. page fault interrupt를 일으키는 fault_addr에 대해 page_in 함수를 적용하여 success 이면, (즉, page-in 에 문제가 없다면) 밑의 함수는 실행하지 않습니다.
+
+
+
+
+
+part2 Swap in and out
+빈 frame, 즉 할당 가능한 free frame이 있는지 없는지 검사 합니다.
+for (i = 0; i < frame_cnt; i++)
+    {
+      struct frame *f = &frames[i];
+      if (!lock_try_acquire (&f->lock))
+        continue;
+      if (f->page == NULL) 
+        {
+          f->page = page;
+          lock_release (&scan_lock);
+          return f;
+        } 
+      lock_release (&f->lock);
+    }
+
+빈 frame이 없을 경우,
+for (i = 0; i < frame_cnt * 2; i++) 
+    {
+      struct frame *f = &frames[hand];
+      if (++hand >= frame_cnt)
+        hand = 0;
+
+      if (!lock_try_acquire (&f->lock))
+        continue;
+
+      if (f->page == NULL) 
+        {
+          f->page = page;
+          lock_release (&scan_lock);
+          return f;
+        } 
+
+      if (page_accessed_recently (f->page)) 
+        {
+          lock_release (&f->lock);
+          continue;
+        }
+          
+      lock_release (&scan_lock);
+      
+      /* Evict this frame. */
+      if (!page_out (f->page))
+        {
+          lock_release (&f->lock);
+          return NULL;
+        }
+
+      f->page = page;
+      return f;
+    }
+
+evict 할 frame을 LRU algorithm과 밑의 page_out 함수에서 dirty bit을 사용하여 찾아준 후 swap-out 해줍니다.
+bool
+page_out (struct page *p)
+{
+  bool dirty;
+  bool ok = false;
+
+  ASSERT (p->frame != NULL);
+  ASSERT (lock_held_by_current_thread (&p->frame->lock));
+
+  pagedir_clear_page(p->thread->pagedir, p->addr);
+
+  dirty = pagedir_is_dirty(p->thread->pagedir, p->addr);
+
+  if (p->file != NULL)
+    {
+      if (dirty)
+        {
+          if (p->private)
+            ok = swap_out (p);
+          else
+            ok = file_write_at (p->file, p->frame->base, p->file_bytes,
+                                p->file_offset) == p->file_bytes;
+        }
+      else
+        ok = true;
+    }
+  else
+    ok = swap_out (p);
+  if ( ok )
+   {
+      p->frame = NULL;
+    }
+
+  return ok;
+}
+
+
+
+
