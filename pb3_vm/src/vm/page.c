@@ -40,7 +40,7 @@ page_for_addr(const void *address)
     struct hash_elem *e;
 
     /* Find existing page. */
-    p.user_addr = (void *)pg_round_down(address);
+    p.addr = (void *)pg_round_down(address);
     e = hash_find(thread_current()->pages, &p.hash_elem);
     if (e != NULL)
       return hash_entry(e, struct page, hash_elem);
@@ -102,7 +102,7 @@ bool page_in(void *fault_addr)
       return false;
   }
   ASSERT(lock_held_by_current_thread(&p->frame->lock));
-  success = pagedir_set_page(thread_current()->pagedir, p->user_addr, p->frame->base, !p->read_only);
+  success = pagedir_set_page(thread_current()->pagedir, p->addr, p->frame->base, !p->read_only);
   frame_unlock(p->frame);
 
   return success;
@@ -117,9 +117,9 @@ bool page_out(struct page *p)
   ASSERT(p->frame != NULL);
   ASSERT(lock_held_by_current_thread(&p->frame->lock));
 
-  pagedir_clear_page(p->thread->pagedir, p->user_addr);
+  pagedir_clear_page(p->thread->pagedir, p->addr);
 
-  dirty = pagedir_is_dirty(p->thread->pagedir, p->user_addr);
+  dirty = pagedir_is_dirty(p->thread->pagedir, p->addr);
 
   if (p->file != NULL)
   {
@@ -151,9 +151,9 @@ bool page_accessed_recently(struct page *p)
   ASSERT(p->frame != NULL);
   ASSERT(lock_held_by_current_thread(&p->frame->lock));
 
-  was_accessed = pagedir_is_accessed(p->thread->pagedir, p->user_addr);
+  was_accessed = pagedir_is_accessed(p->thread->pagedir, p->addr);
   if (was_accessed)
-    pagedir_set_accessed(p->thread->pagedir, p->user_addr, false);
+    pagedir_set_accessed(p->thread->pagedir, p->addr, false);
   return was_accessed;
 }
 
@@ -165,7 +165,7 @@ page_allocate(void *vaddr, bool read_only)
   struct page *p = malloc(sizeof *p);
   if (p != NULL)
   {
-    p->user_addr = pg_round_down(vaddr);
+    p->addr = pg_round_down(vaddr);
     p->read_only = read_only;
     p->private = !read_only;
     p->frame = NULL;
@@ -207,7 +207,7 @@ page_hash(const struct hash_elem *e, void *aux UNUSED)
 {
   /* return a hash value*/
   const struct page *p = hash_entry(e, struct page, hash_elem);
-  return ((uintptr_t)p->user_addr) >> PGBITS;
+  return ((uintptr_t)p->addr) >> PGBITS;
 }
 
 bool page_less(const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED)
@@ -216,7 +216,7 @@ bool page_less(const struct hash_elem *a_, const struct hash_elem *b_, void *aux
   const struct page *a = hash_entry(a_, struct page, hash_elem);
   const struct page *b = hash_entry(b_, struct page, hash_elem);
 
-  return a->user_addr < b->user_addr;
+  return a->addr < b->addr;
 }
 
 bool page_lock(const void *addr, bool to_write)
@@ -228,7 +228,7 @@ bool page_lock(const void *addr, bool to_write)
 
   frame_lock(p);
   if (p->frame == NULL)
-    return (do_page_in(p) && pagedir_set_page(thread_current()->pagedir, p->user_addr, p->frame->base, !p->read_only));
+    return (do_page_in(p) && pagedir_set_page(thread_current()->pagedir, p->addr, p->frame->base, !p->read_only));
   else
     return true;
 }
