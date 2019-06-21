@@ -2,7 +2,6 @@
 Design Document
 
 
-
 ===== Group
 Park Myunghun <mh97888@gmail.com>
 Seok Chanhui  <chanhuicom@gmail.com>
@@ -19,7 +18,6 @@ second meeting  : 2019.06.04 22:10 ~ 23:30
 third meeting    : 2019.06.05 20:00 ~ 2019.06.06. 09:00
 last meeting     : 2019.06.18. 20:10 ~ 21:30
 
-
 프로젝트 3은 pintos/src/vm 밑에 구현을 해서 test를 돌리게 됩니다.
 페이지 테이블을 관리하기 위해 새로 추가한 파일 및 Data Structures 는 다음과 같습니다.
 <page.h> <page.c>
@@ -31,27 +29,18 @@ last meeting     : 2019.06.18. 20:10 ~ 21:30
 1. <page.h> 에는 페이지와 관련된 structure 들을 선언하였습니다.
 struct page 
   {
-    /* Immutable members. */
-    void *addr;                 /* User virtual address. */
-    bool read_only;             /* Read-only page? */
-    struct thread *thread;      /* Owning thread. */
+    struct thread *thread;     
+    void *addr;                 
+    bool read_only;             
+  
+    struct hash_elem hash_elem; 
+    struct frame *frame;   
+    block_sector_t sector;      
 
-    /* Accessed only in owning process context. */
-    struct hash_elem hash_elem; /* struct thread `pages' hash element. */
-
-    /* Set only in owning process context with frame->frame_lock held.
-       Cleared only with scan_lock and frame->frame_lock held. */
-    struct frame *frame;        /* Page frame. */
-
-    /* Swap information, protected by frame->frame_lock. */
-    block_sector_t sector;       /* Starting sector of swap area, or -1. */
-    
-    /* Memory-mapped file information, protected by frame->frame_lock. */
-    bool private;               /* False to write back to file,
-                                   true to write back to swap. */
-    struct file *file;          /* File. */
-    off_t file_offset;          /* Offset in file. */
-    off_t file_bytes;           /* Bytes to read/write, 1...PGSIZE. */
+    bool private;             
+    struct file *file;        
+    off_t file_offset;        
+    off_t file_bytes;           
   };
 
 
@@ -62,9 +51,12 @@ void page_deallocate (void *vaddr);
 bool page_in (void *fault_addr);
 bool page_out (struct page *);
 bool page_accessed_recently (struct page *);
--> page in은 swap 공간에 있는 내용을 다시 메모리로 불러와서 페이지 프레임을 제공하며, page out은 사용 중인 페이지 프레임의 내용을 swap에 저장 후, 그 페이지 프레임을 현재 필요로 하고 있는 다른 프로그램에 주는 것을 말합니다.
+-> page in은 swap 공간에 있는 내용을 다시 메모리로 불러와서 페이지 프레임을 제공하며,
+page out은 사용 중인 페이지 프레임의 내용을 swap에 저장 후, 그 페이지 프레임을 현재 필요로 하고 있는 다른 프로그램에 주는 것을 말합니다.
 이를 위해 bool 타입의 page_in과 page_out을 구현합니다. 
- page_accessed_recently 함수는 최근에 접근한 페이지인지 알 수 있도록 만든 함수입니다. 최근에 액세스 되지 않은 페이지인 경우에는, 해당 페이지는 프레임에서 제거되고, 새로운 페이지가 들어갈 수 있도록 해야 하기 때문입니다.
+
+page_accessed_recently 함수는 최근에 접근한 페이지인지 알 수 있도록 만든 함수입니다.
+최근에 액세스 되지 않은 페이지인 경우에는, 해당 페이지는 프레임에서 제거되고, 새로운 페이지가 들어갈 수 있도록 해야 하기 때문입니다.
 
 
 2. <frame.h> 는 다음과 같습니다.
@@ -76,14 +68,19 @@ struct frame
     struct page *page;         
   };
 동시 접근을 막기 위한 lock, 그리고 virtual address의 base address, 페이지와 매핑하기 위한 page 구조체 포인터를 선언합니다.
-frame.h 도 page.h 와 비슷하게 lock, unlock 함수를 기본으로 작성하고 frame을 해제하는 free 함수도 구현합니다. (void frame_free (struct frame *) )
+frame.h 도 page.h 와 비슷하게 lock, unlock 함수를 기본으로 작성하고 frame을 해제하는 free 함수도 구현합니다.
+(void frame_free (struct frame *) )
 
 3. <swap.h> 는 swap_in, swap_out을 구현합니다.
-swap 개념은, 어떤 프로그램은 실행되려면 반드시 메모리에 올라가야 하는데, 메모리가 부족할 경우 프로세스가 잠시 저장장치(hard disk 또는 ssd)에 가게 되는데 이것을 swap out이라고 합니다. 그리고 다시 메모리로 돌아올 경우는 swap in이라고 합니다. 
-즉, 프레임이 필요한데 여유 공간이 없다면, 최근에 프레임의 페이지들 중 액세스되지 않은 페이지를 프레임에서 빼고(evict), 새로 들어갈 페이지를 삽입하게 됩니다.
+swap 개념은, 어떤 프로그램은 실행되려면 반드시 메모리에 올라가야 하는데,
+메모리가 부족할 경우 프로세스가 잠시 저장장치(hard disk 또는 ssd)에 가게 되는데 이것을 swap out이라고 합니다.
+그리고 다시 메모리로 돌아올 경우는 swap in이라고 합니다. 
+즉, 프레임이 필요한데 여유 공간이 없다면, 최근에 프레임의 페이지들 중 액세스되지 않은 페이지를 프레임에서 빼고(evict),
+새로 들어갈 페이지를 삽입하게 됩니다.
 
 
-Part 1. Page Table management
+
+Page Table management
 ==============================
 Paging을 구현하기 위해 먼저 Page Fault Handler 쪽을 살펴봅니다.
 (threads/palloc.h를 보면 page allocator가 정의되어 있고, 이를 통해 page 단위로 메모리를 할당합니다.)  또한 핀토스에는 기존에 /userprog/exception.c에서 Page Fault 에 대한 구현이 존재합니다.
@@ -94,7 +91,8 @@ Paging을 구현하기 위해 먼저 Page Fault Handler 쪽을 살펴봅니다.
 page.c 에는 bool type의 page in 기능을 하는 함수를 만들며, 가상 메모리에 frame에 할당해 주는 내용을 구현하게 됩니다. 
 success = pagedir_set_page (thread_current ()->pagedir, p->addr,
                               p->frame->base, !p->read_only);
-success는 bool type이며, pagedir_set_page는 /userprog/pagedir.c 에 이미  있습니다. (pagedir.c 에서는 페이지 테이블을 관리하는 코드들을 제공하고 있습니다.)
+success는 bool type이며, pagedir_set_page는 /userprog/pagedir.c 에 이미  있습니다.
+(pagedir.c 에서는 페이지 테이블을 관리하는 코드들을 제공하고 있습니다.)
 
 이를 잠시 살펴보면,
 
@@ -133,101 +131,105 @@ if(page_accessed_recently (f->page) ...
         thread_exit();
       return;
     }
-page_in 함수는 /userprog/exception.c 안에서 page_fault 핸들러 부분에 구현을 하게 됩니다. page fault interrupt를 일으키는 fault_addr에 대해 page_in 함수를 적용하여 success 이면, (즉, page-in 에 문제가 없다면) 밑의 함수는 실행하지 않습니다.
+page_in 함수는 /userprog/exception.c 안에서 page_fault 핸들러 부분에 구현을 하게 됩니다.
+page fault interrupt를 일으키는 fault_addr에 대해 page_in 함수를 적용하여 success 이면,(즉, page-in 에 문제가 없다면)
+밑의 내용은 실행하지 않습니다.
 
 
 
+Swap in and out
+=============================
+크게 Swap init, Swap in, Swap out으로 이루어져 있게 합니다.
 
-
-part2 Swap in and out
-빈 frame, 즉 할당 가능한 free frame이 있는지 없는지 검사 합니다.
-for (i = 0; i < frame_cnt; i++)
-    {
-      struct frame *f = &frames[i];
-      if (!lock_try_acquire (&f->lock))
-        continue;
-      if (f->page == NULL) 
-        {
-          f->page = page;
-          lock_release (&scan_lock);
-          return f;
-        } 
-      lock_release (&f->lock);
-    }
-
-빈 frame이 없을 경우,
-for (i = 0; i < frame_cnt * 2; i++) 
-    {
-      struct frame *f = &frames[hand];
-      if (++hand >= frame_cnt)
-        hand = 0;
-
-      if (!lock_try_acquire (&f->lock))
-        continue;
-
-      if (f->page == NULL) 
-        {
-          f->page = page;
-          lock_release (&scan_lock);
-          return f;
-        } 
-
-      if (page_accessed_recently (f->page)) 
-        {
-          lock_release (&f->lock);
-          continue;
-        }
-          
-      lock_release (&scan_lock);
-      
-      /* Evict this frame. */
-      if (!page_out (f->page))
-        {
-          lock_release (&f->lock);
-          return NULL;
-        }
-
-      f->page = page;
-      return f;
-    }
-
-evict 할 frame을 LRU algorithm과 밑의 page_out 함수에서 dirty bit을 사용하여 찾아준 후 swap-out 해줍니다.
-bool
-page_out (struct page *p)
+</vm/swap.c>
+void wap_init (void)
 {
-  bool dirty;
-  bool ok = false;
-
-  ASSERT (p->frame != NULL);
-  ASSERT (lock_held_by_current_thread (&p->frame->lock));
-
-  pagedir_clear_page(p->thread->pagedir, p->addr);
-
-  dirty = pagedir_is_dirty(p->thread->pagedir, p->addr);
-
-  if (p->file != NULL)
+  swap_device = block_get_role (BLOCK_SWAP);
+  if (swap_device == NULL)
     {
-      if (dirty)
-        {
-          if (p->private)
-            ok = swap_out (p);
-          else
-            ok = file_write_at (p->file, p->frame->base, p->file_bytes,
-                                p->file_offset) == p->file_bytes;
-        }
-      else
-        ok = true;
+      printf ("no swap device--swap disabled\n");
+      swap_bitmap = bitmap_create (0);
     }
-  else
-    ok = swap_out (p);
-  if ( ok )
-   {
-      p->frame = NULL;
-    }
+	.....
+}
 
-  return ok;
+여기서 BLOCK_SWAP 은, <src/devices/block.h> 에 enum 형식으로 만들어져 있는 상수값입니다.
+
+<src/devices/block.h> 
+enum block_type
+  {
+    /* Block device types that play a role in Pintos. */
+    BLOCK_KERNEL,                /* Pintos OS kernel. */
+    BLOCK_FILESYS,               /* File system. */
+    BLOCK_SCRATCH,               /* Scratch. */
+    BLOCK_SWAP,                  /* Swap. */
+    BLOCK_ROLE_CNT,
+
+    /* Other kinds of block devices that Pintos may see but does
+       not interact with. */
+    BLOCK_RAW = BLOCK_ROLE_CNT,  /* "Raw" device with unidentified contents. */
+    BLOCK_FOREIGN,               /* Owned by non-Pintos operating system. */
+    BLOCK_CNT                    /* Number of Pintos block types. */
+  };
+위와 같이 pintos는 block type에 따라 enum type으로 여러 상수값들을 지정하고 있습니다.
+그 중, swapping에 필요한 swap disk 기능을 사용 및 초기화하기 위하여 BLOCK_SWAP을 사용하였습니다.
+
+
+
+다시 /vm/swap.c 의 swap_in 함수를 살펴 보겠습니다.
+
+void
+swap_in (struct page *p)
+{
+....
+for (i = 0; i < PAGE_SECTORS; i++)
+    block_read (swap_device, p->sector + i,
+                p->frame->base + i * BLOCK_SECTOR_SIZE);
+
+여기서 swap_in 은 디스크에서 메모리로, 즉 page P로 읽어오는 과정입니다. 
+
+
+void block_read	(struct block * 	block, block_sector_t 	sector, void * buffer){
+  check_sector (block, sector);
+  block->ops->read (block->aux, sector, buffer);
+  block->read_cnt++;
+}
+
+위처럼 디스크 섹터에서 읽어오는 과정이 devices/block.c 의 block_read 함수에서 이미 pintos 자체적으로 구현되어 있습니다.
+
+
+bool type의 swap_out 함수를 보면, swap disk에 다시 쓰는 코드를 구현하게 됩니다. 이것이 swap_out의 기능 그 자체이기 때문입니다.
+
+bool
+swap_out (struct page *p)
+{
+....
+for(i=0; i < PAGE_SECTORS; i++)
+      block_write(swap_device, p->sector + i, p->frame->base + i * BLOCK_SECTOR_SIZE);
 }
 
 
 
+또한 pintos는 기본적으로 스택 메모리를 지원은 합니다.
+
+그러나 스택의 크기를 키우는 기능은 없습니다. (stack growth의 구현이 없음)
+즉, pintos 기본적으로는 스택 사이즈가 증가해야 할 때 그저 page fault가 나는 식으로만 되어 있습니다.
+
+이를 위해 다음과 같은 코드를 추가하였습니다.
+
+</vm/page.c>
+static struct page *
+page_for_addr (const void *address)
+{
+....
+/* (먼저 사용 가능한 page를 찾고,) */
+....
+/* (페이지가 없으면, 스택을 늘릴 것인지에 대한 구현) */
+....
+ if (address >= PHYS_BASE-STACK_MAX &&address >= thread_current ()->user_esp ? 32) {
+        newP = page_allocate((void *)address, false);
+        return newP;
+      }
+...
+}
 
