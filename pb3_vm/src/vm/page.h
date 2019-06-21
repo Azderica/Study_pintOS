@@ -9,7 +9,7 @@
 /* Virtual page. */
 struct page
 {
-  void *user_addr;    // user virtual address 
+  void *addr;    // user virtual address 
   bool read_only;     // check read-only
   struct thread *thread; // owing thread
 
